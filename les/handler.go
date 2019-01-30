@@ -26,23 +26,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/mclock"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/eth/downloader"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/light"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discv5"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -73,6 +73,7 @@ type BlockChain interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
 	CurrentHeader() *types.Header
+	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
 	InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
@@ -254,8 +255,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		head    = pm.blockchain.CurrentHeader()
 		hash    = head.Hash()
 		number  = head.Number.Uint64()
+		td      = pm.blockchain.GetTd(hash, number)
 	)
-	if err := p.Handshake(hash, number, genesis.Hash(), pm.server); err != nil {
+	if err := p.Handshake(td, hash, number, genesis.Hash(), pm.server); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -387,7 +389,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.Log().Trace("Valid announcement signature")
 		}
 
-		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "reorg", req.ReorgDepth)
+		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
 		if pm.fetcher != nil {
 			pm.fetcher.announce(p, &req)
 		}
@@ -1183,7 +1185,7 @@ type peerConnection struct {
 }
 
 func (pc *peerConnection) Head() (common.Hash, *big.Int) {
-	return pc.peer.HeadAndNum()
+	return pc.peer.HeadAndTd()
 }
 
 func (pc *peerConnection) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {

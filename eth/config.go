@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/node"
-	"fmt"
 	"math/big"
 	"os"
 	"os/user"
@@ -26,51 +24,32 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/eth/downloader"
-	"github.com/PlatONnetwork/PlatON-Go/eth/gasprice"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-)
-
-const (
-	datadirCbftConfig = "cbft.json" // Path within the datadir to the cbft config
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
-	SyncMode: downloader.FullSync,
-	CbftConfig: CbftConfig{
-		Period:           1,
-		Epoch:            250000,
-		MaxLatency:       600,
-		LegalCoefficient: 1.0,
-		Duration:         10,
-		Ppos: &PposConfig{
-			Candidate: &CandidateConfig{
-				Threshold: 			"1000000000000000000000000",
-				DepositLimit: 	  	10,
-				Allowed: 			100,
-				MaxChair:          	10,
-				MaxCount:          	100,
-				RefundBlockNumber: 	512,
-			},
-			Ticket: &TicketConfig{
-				TicketPrice: 		"1000000000000000000",
-				MaxCount:			51200,
-				ExpireBlockNumber: 	1536000,
-			},
-		},
+	SyncMode: downloader.FastSync,
+	Ethash: ethash.Config{
+		CacheDir:       "ethash",
+		CachesInMem:    2,
+		CachesOnDisk:   3,
+		DatasetsInMem:  1,
+		DatasetsOnDisk: 2,
 	},
 	NetworkId:     1,
 	LightPeers:    100,
 	DatabaseCache: 768,
 	TrieCache:     256,
 	TrieTimeout:   60 * time.Minute,
-	MinerGasFloor: 3150000000,
-	MinerGasCeil:  3150000000,
+	MinerGasFloor: 8000000,
+	MinerGasCeil:  8000000,
 	MinerGasPrice: big.NewInt(params.GWei),
 	MinerRecommit: 3 * time.Second,
 
@@ -79,9 +58,6 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
-
-	MPCPool: core.DefaultMPCPoolConfig,
-	VCPool:  core.DefaultVCPoolConfig,
 }
 
 func init() {
@@ -92,9 +68,9 @@ func init() {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		//DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
+		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
 	} else {
-		//DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }
 
@@ -104,8 +80,6 @@ type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
-
-	CbftConfig CbftConfig `toml:",omitempty"`
 
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
@@ -133,6 +107,9 @@ type Config struct {
 	MinerRecommit  time.Duration
 	MinerNoverify  bool
 
+	// Ethash options
+	Ethash ethash.Config
+
 	// Transaction pool options
 	TxPool core.TxPoolConfig
 
@@ -149,72 +126,8 @@ type Config struct {
 	EWASMInterpreter string
 	// Type of the EVM interpreter ("" for default)
 	EVMInterpreter string
-
-
-	// MPC pool options
-	MPCPool core.MPCPoolConfig
-	VCPool  core.VCPoolConfig
-	Debug bool
-}
-
-type CbftConfig struct {
-	Period           uint64  `json:"period"`           // Number of seconds between blocks to enforce
-	Epoch            uint64  `json:"epoch"`            // Epoch length to reset votes and checkpoint
-	MaxLatency       int64   `json:"maxLatency"`
-	LegalCoefficient float64 `json:"legalCoefficient"`
-	Duration         int64   `json:"duration"`
-	Ppos 			*PposConfig 	`json:"ppos"`
-}
-
-
-type PposConfig struct {
-	Candidate 				*CandidateConfig 			`json:"candidate"`
-	Ticket 					*TicketConfig 				`json:"ticket"`
-}
-
-type CandidateConfig struct {
-	// min deposit allow threshold
-	Threshold				string 					`json:"threshold"`
-	// min deposit limit percentage
-	DepositLimit 			uint64					`json:"depositLimit"`
-	// allow put into immedidate condition
-	Allowed					uint64					`json:"allowed"`
-	// allow immediate elected max count
-	MaxCount				uint64					`json:"maxCount"`
-	// allow witness max count
-	MaxChair				uint64					`json:"maxChair"`
-	// allow block interval for refunds
-	RefundBlockNumber 		uint64 					`json:"refundBlockNumber"`
-
-}
-type TicketConfig struct {
-	TicketPrice 		string 						`json:"ticketPrice"`
-	// Maximum number of ticket pool
-	MaxCount				uint64					`json:"maxCount"`
-	// Reach expired quantity
-	ExpireBlockNumber		uint64					`json:"expireBlockNumber"`
 }
 
 type configMarshaling struct {
 	MinerExtraData hexutil.Bytes
-}
-
-// StaticNodes returns a list of node enode URLs configured as static nodes.
-func (c *Config) LoadCbftConfig(nodeConfig node.Config) *CbftConfig {
-	return c.parsePersistentCbftConfig(filepath.Join(nodeConfig.DataDir, datadirCbftConfig))
-}
-
-// parsePersistentNodes parses a list of discovery node URLs loaded from a .json
-// file from within the data directory.
-func (c *Config) parsePersistentCbftConfig(path string) *CbftConfig {
-	if _, err := os.Stat(path); err != nil {
-		return nil
-	}
-	// Load the nodes from the config file.
-	config := CbftConfig{}
-	if err := common.LoadJSON(path, &config); err != nil {
-		log.Error(fmt.Sprintf("Can't load cbft config file %s: %v", path, err))
-		return nil
-	}
-	return &config
 }

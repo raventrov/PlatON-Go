@@ -23,10 +23,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	whisper "github.com/PlatONnetwork/PlatON-Go/whisper/whisperv6"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that
@@ -105,6 +105,7 @@ func (h *Header) GetRoot() *Hash         { return &Hash{h.header.Root} }
 func (h *Header) GetTxHash() *Hash       { return &Hash{h.header.TxHash} }
 func (h *Header) GetReceiptHash() *Hash  { return &Hash{h.header.ReceiptHash} }
 func (h *Header) GetBloom() *Bloom       { return &Bloom{h.header.Bloom} }
+func (h *Header) GetDifficulty() *BigInt { return &BigInt{h.header.Difficulty} }
 func (h *Header) GetNumber() int64       { return h.header.Number.Int64() }
 func (h *Header) GetGasLimit() int64     { return int64(h.header.GasLimit) }
 func (h *Header) GetGasUsed() int64      { return int64(h.header.GasUsed) }
@@ -175,6 +176,7 @@ func (b *Block) GetRoot() *Hash                 { return &Hash{b.block.Root()} }
 func (b *Block) GetTxHash() *Hash               { return &Hash{b.block.TxHash()} }
 func (b *Block) GetReceiptHash() *Hash          { return &Hash{b.block.ReceiptHash()} }
 func (b *Block) GetBloom() *Bloom               { return &Bloom{b.block.Bloom()} }
+func (b *Block) GetDifficulty() *BigInt         { return &BigInt{b.block.Difficulty()} }
 func (b *Block) GetNumber() int64               { return b.block.Number().Int64() }
 func (b *Block) GetGasLimit() int64             { return int64(b.block.GasLimit()) }
 func (b *Block) GetGasUsed() int64              { return int64(b.block.GasUsed()) }

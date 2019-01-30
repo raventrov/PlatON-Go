@@ -27,16 +27,16 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/cmd/evm/internal/compiler"
-	"github.com/PlatONnetwork/PlatON-Go/cmd/utils"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm/runtime"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -101,10 +101,10 @@ func runCmd(ctx *cli.Context) error {
 		genesisConfig = gen
 		db := ethdb.NewMemDatabase()
 		genesis := gen.ToBlock(db)
-		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db), genesis.Number(), genesis.Hash())
+		statedb, _ = state.New(genesis.Root(), state.NewDatabase(db))
 		chainConfig = gen.Config
 	} else {
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+		statedb, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
 		genesisConfig = new(core.Genesis)
 	}
 	if ctx.GlobalString(SenderFlag.Name) != "" {
@@ -166,6 +166,7 @@ func runCmd(ctx *cli.Context) error {
 		GasLimit:    initialGas,
 		GasPrice:    utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:       utils.GlobalBig(ctx, ValueFlag.Name),
+		Difficulty:  genesisConfig.Difficulty,
 		Time:        new(big.Int).SetUint64(genesisConfig.Timestamp),
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),

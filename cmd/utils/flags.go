@@ -28,33 +28,35 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/accounts"
-	"github.com/PlatONnetwork/PlatON-Go/accounts/keystore"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/fdlimit"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/dashboard"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
-	"github.com/PlatONnetwork/PlatON-Go/eth/downloader"
-	"github.com/PlatONnetwork/PlatON-Go/eth/gasprice"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/ethstats"
-	"github.com/PlatONnetwork/PlatON-Go/les"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
-	"github.com/PlatONnetwork/PlatON-Go/metrics/influxdb"
-	"github.com/PlatONnetwork/PlatON-Go/node"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discv5"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/nat"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/netutil"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	whisper "github.com/PlatONnetwork/PlatON-Go/whisper/whisperv6"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/dashboard"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/params"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -200,6 +202,36 @@ var (
 		Usage: "Dashboard metrics collection refresh rate",
 		Value: dashboard.DefaultConfig.Refresh,
 	}
+	// Ethash settings
+	EthashCacheDirFlag = DirectoryFlag{
+		Name:  "ethash.cachedir",
+		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
+	}
+	EthashCachesInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.cachesinmem",
+		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
+		Value: eth.DefaultConfig.Ethash.CachesInMem,
+	}
+	EthashCachesOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.cachesondisk",
+		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
+		Value: eth.DefaultConfig.Ethash.CachesOnDisk,
+	}
+	EthashDatasetDirFlag = DirectoryFlag{
+		Name:  "ethash.dagdir",
+		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
+		Value: DirectoryString{eth.DefaultConfig.Ethash.DatasetDir},
+	}
+	EthashDatasetsInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.dagsinmem",
+		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value: eth.DefaultConfig.Ethash.DatasetsInMem,
+	}
+	EthashDatasetsOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.dagsondisk",
+		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
+		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
 		Name:  "txpool.locals",
@@ -248,11 +280,6 @@ var (
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
 		Value: eth.DefaultConfig.TxPool.GlobalQueue,
-	}
-	TxPoolGlobalTxCountFlag = cli.Uint64Flag{
-		Name:  "txpool.globaltxcount",
-		Usage: "Maximum number of transactions for package",
-		Value: eth.DefaultConfig.TxPool.GlobalTxCount,
 	}
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
@@ -455,12 +482,7 @@ var (
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: 50,
-	}
-	MaxConsensusPeersFlag = cli.IntFlag{
-		Name:  "maxconsensuspeers",
-		Usage: "Maximum number of network consensus peers (network disabled if set to 0)",
-		Value: 75,
+		Value: 25,
 	}
 	MaxPendingPeersFlag = cli.IntFlag{
 		Name:  "maxpendpeers",
@@ -470,7 +492,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 16789,
+		Value: 30303,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -567,7 +589,7 @@ var (
 	MetricsInfluxDBDatabaseFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.database",
 		Usage: "InfluxDB database name to push reported metrics to",
-		Value: "platon",
+		Value: "geth",
 	}
 	MetricsInfluxDBUsernameFlag = cli.StringFlag{
 		Name:  "metrics.influxdb.username",
@@ -597,37 +619,6 @@ var (
 	EVMInterpreterFlag = cli.StringFlag{
 		Name:  "vm.evm",
 		Usage: "External EVM configuration (default = built-in interpreter)",
-		Value: "",
-	}
-
-	// mpc compute
-	MPCIceFileFlag = cli.StringFlag{
-		Name:  "mpc.ice",
-		Usage: "Filename for ice to init mvm",
-		Value: "",
-	}
-	MPCActorFlag = cli.StringFlag{
-		Name: "mpc.actor",
-		Usage: "The address of actor to exec mpc compute",
-		Value: "",
-	}
-	MPCEnabledFlag = cli.BoolFlag{
-		Name:  "mpc",
-		Usage: "Enable mpc compute",
-	}
-	VCEnabledFlag = cli.BoolFlag{
-		Name:  "vc",
-		Usage: "Enable vc compute",
-	}
-	VCActorFlag = cli.StringFlag{
-		Name:  "vc.actor",
-		Usage: "The address of vc to exec set result",
-		Value: "",
-	}
-
-	VCPasswordFlag = cli.StringFlag{
-		Name:  "vc.password",
-		Usage: "the pwd of unlock actor",
 		Value: "",
 	}
 )
@@ -858,7 +849,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `platon account list`)")
+	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -889,7 +880,6 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 	}
 }
 
-
 // MakePasswordList reads password lines from the file specified by the global --password flag.
 func MakePasswordList(ctx *cli.Context) []string {
 	path := ctx.GlobalString(PasswordFileFlag.Name)
@@ -919,9 +909,6 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
 	lightPeers := ctx.GlobalInt(LightPeersFlag.Name)
 
-	if ctx.GlobalIsSet(MaxConsensusPeersFlag.Name) {
-		cfg.MaxConsensusPeers = ctx.GlobalInt(MaxConsensusPeersFlag.Name)
-	}
 	if ctx.GlobalIsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.GlobalInt(MaxPeersFlag.Name)
 		if lightServer && !ctx.GlobalIsSet(LightPeersFlag.Name) {
@@ -1055,52 +1042,30 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	if ctx.GlobalIsSet(TxPoolGlobalQueueFlag.Name) {
 		cfg.GlobalQueue = ctx.GlobalUint64(TxPoolGlobalQueueFlag.Name)
 	}
-	if ctx.GlobalIsSet(TxPoolGlobalTxCountFlag.Name) {
-		cfg.GlobalTxCount = ctx.GlobalUint64(TxPoolGlobalTxCountFlag.Name)
-	}
 	if ctx.GlobalIsSet(TxPoolLifetimeFlag.Name) {
 		cfg.Lifetime = ctx.GlobalDuration(TxPoolLifetimeFlag.Name)
 	}
 }
 
-func setMpcPool(ctx *cli.Context, cfg *core.MPCPoolConfig) {
-	if ctx.GlobalIsSet(MPCEnabledFlag.Name) {
-		cfg.MPCEnable = ctx.GlobalBool(MPCEnabledFlag.Name)
+func setEthash(ctx *cli.Context, cfg *eth.Config) {
+	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
+		cfg.Ethash.CacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
 	}
-	if ctx.GlobalIsSet(MPCActorFlag.Name) {
-		cfg.MpcActor = common.HexToAddress(ctx.GlobalString(MPCActorFlag.Name))
+	if ctx.GlobalIsSet(EthashDatasetDirFlag.Name) {
+		cfg.Ethash.DatasetDir = ctx.GlobalString(EthashDatasetDirFlag.Name)
 	}
-	if file := ctx.GlobalString(MPCIceFileFlag.Name); file != "" {
-		if _, err := os.Stat(file); err != nil {
-			fmt.Println("ice conf not exists.")
-			return
-		}
-		if b := filepath.IsAbs(file); !b {
-			absPath, err := filepath.Abs(file)
-			if err != nil {
-				fmt.Println("Read abs path of ice conf fail: ", err.Error())
-				return
-			}
-			cfg.IceConf = absPath
-		} else {
-			cfg.IceConf = file
-		}
+	if ctx.GlobalIsSet(EthashCachesInMemoryFlag.Name) {
+		cfg.Ethash.CachesInMem = ctx.GlobalInt(EthashCachesInMemoryFlag.Name)
 	}
-}
-
-func setVcPool(ctx *cli.Context, cfg *core.VCPoolConfig) {
-	if ctx.GlobalIsSet(VCEnabledFlag.Name) {
-		cfg.VCEnable = ctx.GlobalBool(VCEnabledFlag.Name)
+	if ctx.GlobalIsSet(EthashCachesOnDiskFlag.Name) {
+		cfg.Ethash.CachesOnDisk = ctx.GlobalInt(EthashCachesOnDiskFlag.Name)
 	}
-	if ctx.GlobalIsSet(VCActorFlag.Name) {
-		cfg.VcActor = common.HexToAddress(ctx.GlobalString(VCActorFlag.Name))
-		fmt.Println("cfg.VcActor", cfg.VcActor)
+	if ctx.GlobalIsSet(EthashDatasetsInMemoryFlag.Name) {
+		cfg.Ethash.DatasetsInMem = ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name)
 	}
-
-	if ctx.GlobalIsSet(VCPasswordFlag.Name) {
-		cfg.VcPassword = ctx.GlobalString(VCPasswordFlag.Name)
+	if ctx.GlobalIsSet(EthashDatasetsOnDiskFlag.Name) {
+		cfg.Ethash.DatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
 	}
-
 }
 
 // checkExclusive verifies that only a single instance of the provided flags was
@@ -1164,9 +1129,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
-	// for mpc compute
-	setMpcPool(ctx, &cfg.MPCPool)
-	setVcPool(ctx, &cfg.VCPool)
+	setEthash(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
 		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
@@ -1189,7 +1152,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
-	cfg.NoPruning = /*ctx.GlobalString(GCModeFlag.Name) == "archive"*/ true
+	cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
 
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cfg.TrieCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
@@ -1361,7 +1324,7 @@ func SetupMetrics(ctx *cli.Context) {
 
 		if enableExport {
 			log.Info("Enabling metrics export to InfluxDB")
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "platon.", map[string]string{
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", map[string]string{
 				"host": hosttag,
 			})
 		}
@@ -1408,12 +1371,26 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("%v", err)
 	}
 	var engine consensus.Engine
-
+	if config.Clique != nil {
+		engine = clique.New(config.Clique, chainDb)
+	} else {
+		engine = ethash.NewFaker()
+		if !ctx.GlobalBool(FakePoWFlag.Name) {
+			engine = ethash.New(ethash.Config{
+				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
+				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
+				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
+				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
+				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
+				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+			}, nil, false)
+		}
+	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
-		Disabled:      /*ctx.GlobalString(GCModeFlag.Name) == "archive"*/ true,
+		Disabled:      ctx.GlobalString(GCModeFlag.Name) == "archive",
 		TrieNodeLimit: eth.DefaultConfig.TrieCache,
 		TrieTimeLimit: eth.DefaultConfig.TrieTimeout,
 	}
@@ -1449,11 +1426,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. platon account new --keystore /tmp/mykeystore --lightkdf
+// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// platon --keystore /tmp/mykeystore --lightkdf account new
+// geth --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing

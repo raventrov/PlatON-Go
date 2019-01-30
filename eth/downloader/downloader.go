@@ -25,15 +25,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	ethereum "github.com/PlatONnetwork/PlatON-Go"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -148,7 +148,6 @@ type Downloader struct {
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
-	running          int32                 // The indicator whether the Downloader is running or not.
 }
 
 // LightChain encapsulates functions required to synchronise a light chain.
@@ -161,6 +160,9 @@ type LightChain interface {
 
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
+
+	// GetTd returns the total difficulty of a local block.
+	GetTd(common.Hash, uint64) *big.Int
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
 	InsertHeaderChain([]*types.Header, int) (int, error)
@@ -311,9 +313,8 @@ func (d *Downloader) UnregisterPeer(id string) error {
 
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
-func (d *Downloader) Synchronise(id string, head common.Hash, bn *big.Int, mode SyncMode) error {
-	log.Debug("Synchronise from other peer", "peerID", id, "head", head, "bn", bn, "mode", mode)
-	err := d.synchronise(id, head, bn, mode)
+func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
+	err := d.synchronise(id, head, td, mode)
 	switch err {
 	case nil:
 	case errBusy:
@@ -338,7 +339,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, bn *big.Int, mode 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, bn *big.Int, mode SyncMode) error {
+func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -395,21 +396,18 @@ func (d *Downloader) synchronise(id string, hash common.Hash, bn *big.Int, mode 
 	if p == nil {
 		return errUnknownPeer
 	}
-	return d.syncWithPeer(p, hash, bn)
+	return d.syncWithPeer(p, hash, td)
 }
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
-func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, bn *big.Int) (err error) {
+func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
-	d.start()
 	defer func() {
 		// reset on error
 		if err != nil {
-			d.stop()
 			d.mux.Post(FailedEvent{err})
 		} else {
-			d.stop()
 			d.mux.Post(DoneEvent{})
 		}
 	}()
@@ -417,7 +415,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, bn *big.I
 		return errTooOld
 	}
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "bn", bn, "mode", d.mode)
+	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "td", td, "mode", d.mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", time.Since(start))
 	}(time.Now())
@@ -466,7 +464,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, bn *big.I
 		func() error { return d.fetchHeaders(p, origin+1, pivot) }, // Headers are always retrieved
 		func() error { return d.fetchBodies(origin + 1) },          // Bodies are retrieved during normal and fast sync
 		func() error { return d.fetchReceipts(origin + 1) },        // Receipts are retrieved during fast sync
-		func() error { return d.processHeaders(origin+1, pivot, bn) },
+		func() error { return d.processHeaders(origin+1, pivot, td) },
 	}
 	if d.mode == FastSync {
 		fetchers = append(fetchers, func() error { return d.processFastSyncContent(latest) })
@@ -932,7 +930,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 	var (
 		deliver = func(packet dataPack) (int, error) {
 			pack := packet.(*bodyPack)
-			return d.queue.DeliverBodies(pack.peerID, pack.transactions, pack.uncles, pack.signatures)
+			return d.queue.DeliverBodies(pack.peerID, pack.transactions, pack.uncles)
 		}
 		expire   = func() map[string]int { return d.queue.ExpireBodies(d.requestTTL()) }
 		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchBodies(req) }
@@ -1159,7 +1157,7 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 // processHeaders takes batches of retrieved headers from an input channel and
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
-func (d *Downloader) processHeaders(origin uint64, pivot uint64, bn *big.Int) error {
+func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) error {
 	// Keep a count of uncertain headers to roll back
 	rollback := []*types.Header{}
 	defer func() {
@@ -1219,7 +1217,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, bn *big.Int) er
 				// R: Nothing to give
 				if d.mode != LightSync {
 					head := d.blockchain.CurrentBlock()
-					if !gotHeaders && bn.Cmp(head.Number()) > 0 {
+					if !gotHeaders && td.Cmp(d.blockchain.GetTd(head.Hash(), head.NumberU64())) > 0 {
 						return errStallingPeer
 					}
 				}
@@ -1232,7 +1230,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, bn *big.Int) er
 				// peer gave us something useful, we're already happy/progressed (above check).
 				if d.mode == FastSync || d.mode == LightSync {
 					head := d.lightchain.CurrentHeader()
-					if bn.Cmp(head.Number) > 0 {
+					if td.Cmp(d.lightchain.GetTd(head.Hash(), head.Number.Uint64())) > 0 {
 						return errStallingPeer
 					}
 				}
@@ -1358,7 +1356,7 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	)
 	blocks := make([]*types.Block, len(results))
 	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.Signatures)
+		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	}
 	if index, err := d.blockchain.InsertChain(blocks); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
@@ -1500,7 +1498,7 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 	blocks := make([]*types.Block, len(results))
 	receipts := make([]types.Receipts, len(results))
 	for i, result := range results {
-		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.Signatures)
+		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 		receipts[i] = result.Receipts
 	}
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts); err != nil {
@@ -1511,7 +1509,7 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 }
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
-	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles, result.Signatures)
+	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}); err != nil {
 		return err
@@ -1530,8 +1528,8 @@ func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err err
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
-func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header, signatures [][]*common.BlockConfirmSign) (err error) {
-	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles, signatures}, bodyInMeter, bodyDropMeter)
+func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction, uncles [][]*types.Header) (err error) {
+	return d.deliver(id, d.bodyCh, &bodyPack{id, transactions, uncles}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
@@ -1641,16 +1639,4 @@ func (d *Downloader) requestTTL() time.Duration {
 		ttl = ttlLimit
 	}
 	return ttl
-}
-
-func (d *Downloader) start() {
-	atomic.StoreInt32(&d.running, 1)
-}
-
-func (d *Downloader) stop() {
-	atomic.StoreInt32(&d.running, 0)
-}
-
-func (d *Downloader) IsRunning() bool {
-	return atomic.LoadInt32(&d.running) == 1
 }

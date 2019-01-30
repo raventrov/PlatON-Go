@@ -11,23 +11,10 @@
 GOBIN = $(shell pwd)/build/bin
 GO ?= latest
 
-platon:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install ./cmd/platon
+geth:
+	build/env.sh go run build/ci.go install ./cmd/geth
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/platon\" to launch platon."
-
-platon-with-mpc:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install -mpc on ./cmd/platon
-	@echo "Done building platon with mpc."
-	@echo "Run \"$(GOBIN)/platon\" to launch platon."
-
-platon-with-vc:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install -vc on ./cmd/platon
-	@echo "Done building platon with vc."
-	@echo "Run \"$(GOBIN)/platon\" to launch platon."
+	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
 swarm:
 	build/env.sh go run build/ci.go install ./cmd/swarm
@@ -35,20 +22,7 @@ swarm:
 	@echo "Run \"$(GOBIN)/swarm\" to launch swarm."
 
 all:
-	build/build_deps.sh
 	build/env.sh go run build/ci.go install
-
-all-debug:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install -gcflags on
-
-all-with-mpc:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install -mpc on
-
-all-with-vc:
-	build/build_deps.sh
-	build/env.sh go run build/ci.go install -vc on
 
 android:
 	build/env.sh go run build/ci.go aar --local
@@ -67,7 +41,6 @@ lint: ## Run linters.
 	build/env.sh go run build/ci.go lint
 
 clean:
-	./build/clean_deps.sh
 	./build/clean_go_build_cache.sh
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 

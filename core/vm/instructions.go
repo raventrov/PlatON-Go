@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/math"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -604,17 +604,15 @@ func opMstore8(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 
 func opSload(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := stack.peek()
-	// todo: hash -> bytes
-	val := interpreter.evm.StateDB.GetState(contract.Address(), common.BigToHash(loc).Bytes())
-	loc.SetBytes(val)
+	val := interpreter.evm.StateDB.GetState(contract.Address(), common.BigToHash(loc))
+	loc.SetBytes(val.Bytes())
 	return nil, nil
 }
 
 func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
-	// todo: hash -> bytes
-	interpreter.evm.StateDB.SetState(contract.Address(), loc.Bytes(), common.BigToHash(val).Bytes())
+	interpreter.evm.StateDB.SetState(contract.Address(), loc, common.BigToHash(val))
 
 	interpreter.intPool.put(val)
 	return nil, nil

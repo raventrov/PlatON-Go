@@ -28,11 +28,11 @@ import (
 	"testing"
 	"testing/quick"
 
-	"gopkg.in/check.v1"
+	check "gopkg.in/check.v1"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -40,9 +40,7 @@ import (
 func TestUpdateLeaks(t *testing.T) {
 	// Create an empty state database
 	db := ethdb.NewMemDatabase()
-	//dir, _ := ioutil.TempDir("", "eth-core-bench")
-	//ethdb,err:= ethdb.NewLDBDatabase(dir,128,128)
-	state, _ := New(common.Hash{}, NewDatabase(db), big.NewInt(0), common.Hash{})
+	state, _ := New(common.Hash{}, NewDatabase(db))
 
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
@@ -50,7 +48,7 @@ func TestUpdateLeaks(t *testing.T) {
 		state.AddBalance(addr, big.NewInt(int64(11*i)))
 		state.SetNonce(addr, uint64(42*i))
 		if i%2 == 0 {
-			state.SetState(addr, []byte{i, i, i}, []byte{i, i, i, i})
+			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
 		}
 		if i%3 == 0 {
 			state.SetCode(addr, []byte{i, i, i, i, i})
@@ -70,15 +68,15 @@ func TestIntermediateLeaks(t *testing.T) {
 	// Create two state databases, one transitioning to the final state, the other final from the beginning
 	transDb := ethdb.NewMemDatabase()
 	finalDb := ethdb.NewMemDatabase()
-	transState, _ := New(common.Hash{}, NewDatabase(transDb), big.NewInt(0), common.Hash{})
-	finalState, _ := New(common.Hash{}, NewDatabase(finalDb), big.NewInt(0), common.Hash{})
+	transState, _ := New(common.Hash{}, NewDatabase(transDb))
+	finalState, _ := New(common.Hash{}, NewDatabase(finalDb))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 		if i%2 == 0 {
-			//state.SetState(addr, common.Hash{i, i, i, 0}, common.Hash{})
-			//state.SetState(addr, common.Hash{i, i, i, tweak}, common.Hash{i, i, i, i, tweak})
+			state.SetState(addr, common.Hash{i, i, i, 0}, common.Hash{})
+			state.SetState(addr, common.Hash{i, i, i, tweak}, common.Hash{i, i, i, i, tweak})
 		}
 		if i%3 == 0 {
 			state.SetCode(addr, []byte{i, i, i, i, i, tweak})
@@ -124,7 +122,7 @@ func TestIntermediateLeaks(t *testing.T) {
 // https://github.com/ethereum/go-ethereum/pull/15549.
 func TestCopy(t *testing.T) {
 	// Create a random state test to copy and modify "independently"
-	orig, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+	orig, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
@@ -235,7 +233,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
-				//s.SetState(addr, key, val)
+				s.SetState(addr, key, val)
 			},
 			args: make([]int64, 2),
 		},
@@ -335,7 +333,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		state, _     = New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+		state, _     = New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
 	)
@@ -349,7 +347,7 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		checkstate, _ := New(common.Hash{}, state.Database(), big.NewInt(0), common.Hash{})
+		checkstate, _ := New(common.Hash{}, state.Database())
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkstate)
 		}
@@ -382,14 +380,14 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeHash", state.GetCodeHash(addr), checkstate.GetCodeHash(addr))
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
-		//if obj := state.getStateObject(addr); obj != nil {
-		//	state.ForEachStorage(addr, func(key, value common.Hash) bool {
-		//		return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
-		//	})
-		//	checkstate.ForEachStorage(addr, func(key, value common.Hash) bool {
-		//		return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
-		//	})
-		//}
+		if obj := state.getStateObject(addr); obj != nil {
+			state.ForEachStorage(addr, func(key, value common.Hash) bool {
+				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
+			})
+			checkstate.ForEachStorage(addr, func(key, value common.Hash) bool {
+				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
+			})
+		}
 		if err != nil {
 			return err
 		}
@@ -426,7 +424,7 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
 func TestCopyOfCopy(t *testing.T) {
-	sdb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+	sdb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 	addr := common.HexToAddress("aaaa")
 	sdb.SetBalance(addr, big.NewInt(42))
 

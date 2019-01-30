@@ -23,13 +23,13 @@ import (
 	"net"
 	"sync"
 
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/node"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/simulations/pipes"
-	"github.com/PlatONnetwork/PlatON-Go/rpc"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
@@ -179,7 +179,7 @@ func (sn *SimNode) Addr() []byte {
 
 // Node returns a discover.Node representing the SimNode
 func (sn *SimNode) Node() *discover.Node {
-	return discover.NewNode(sn.ID, net.IP{127, 0, 0, 1}, 16789, 16789)
+	return discover.NewNode(sn.ID, net.IP{127, 0, 0, 1}, 30303, 30303)
 }
 
 // Client returns an rpc.Client which can be used to communicate with the

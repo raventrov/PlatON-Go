@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (

@@ -24,13 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/protocols"
-	"github.com/PlatONnetwork/PlatON-Go/rpc"
-	"github.com/PlatONnetwork/PlatON-Go/swarm/log"
-	"github.com/PlatONnetwork/PlatON-Go/swarm/state"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 const (
@@ -390,7 +390,7 @@ func NewNodeIDFromAddr(addr *BzzAddr) discover.NodeID {
 func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
-		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 16789, 16789).String()),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
 }
 

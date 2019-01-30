@@ -31,9 +31,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 const NodeIDBits = 512
@@ -136,7 +136,7 @@ var incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
 // query parameter "discport".
 //
 // In the following example, the node URL describes
-// a node with IP address 10.3.58.6, TCP listening port 16789
+// a node with IP address 10.3.58.6, TCP listening port 30303
 // and UDP discovery port 30301.
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
@@ -177,11 +177,7 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid host: %v", err)
 	}
 	if ip = net.ParseIP(host); ip == nil {
-		if ips, err := net.LookupIP(host); (err == nil && len(ips) != 0) {
-			ip = ips[0]
-		} else {
-			return nil, errors.New("invalid IP address")
-		}
+		return nil, errors.New("invalid IP address")
 	}
 	// Ensure the IP is 4 bytes long for IPv4 addresses.
 	if ipv4 := ip.To4(); ipv4 != nil {

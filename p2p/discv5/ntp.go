@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (

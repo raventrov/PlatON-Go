@@ -91,7 +91,6 @@ func SolidityVersion(solc string) (*Solidity, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Regular expression takes the matching part
 	matches := versionRegexp.FindStringSubmatch(out.String())
 	if len(matches) != 4 {
 		return nil, fmt.Errorf("can't parse solc version %q", out.String())

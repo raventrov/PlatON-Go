@@ -18,21 +18,17 @@
 package state
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/ticketcache"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/crypto/sha3"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
 	"math/big"
 	"sort"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type revision struct {
@@ -41,16 +37,11 @@ type revision struct {
 }
 
 var (
-	storagePrefix = "storage-value-"
 	// emptyState is the known hash of an empty state trie entry.
 	emptyState = crypto.Keccak256Hash(nil)
 
 	// emptyCode is the known hash of the empty EVM bytecode.
-	emptyCode    = crypto.Keccak256Hash(nil)
-	emptyStorage = crypto.Keccak256Hash([]byte(storagePrefix))
-
-	//ppos add
-	ErrNotfindFromNodeId = errors.New("Not find tickets from node id")
+	emptyCode = crypto.Keccak256Hash(nil)
 )
 
 // StateDBs within the ethereum protocol are used to store anything
@@ -65,6 +56,7 @@ type StateDB struct {
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects      map[common.Address]*stateObject
 	stateObjectsDirty map[common.Address]struct{}
+
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -89,15 +81,10 @@ type StateDB struct {
 	nextRevisionId int
 
 	lock sync.Mutex
-
-	//ppos add -> Current ticket pool cache object <nodeid.string(), ticketId>
-	tickeCache ticketcache.TicketCache
-	tclock     sync.RWMutex
 }
 
 // Create a new state from a given trie.
-//func New(root common.Hash, db Database) (*StateDB, error) {
-func New(root common.Hash, db Database, blocknumber *big.Int, blockhash common.Hash) (*StateDB, error) {
+func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -110,7 +97,6 @@ func New(root common.Hash, db Database, blocknumber *big.Int, blockhash common.H
 		logs:              make(map[common.Hash][]*types.Log),
 		preimages:         make(map[common.Hash][]byte),
 		journal:           newJournal(),
-		tickeCache:        ticketcache.GetNodeTicketsCacheMap(blocknumber, blockhash),
 	}, nil
 }
 
@@ -262,29 +248,21 @@ func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 }
 
 // GetState retrieves a value from the given account's storage trie.
-func (self *StateDB) GetState(addr common.Address, key []byte) []byte {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := self.getStateObject(addr)
-	keyTrie, _, _ := getKeyValue(addr, key, nil)
 	if stateObject != nil {
-		return stateObject.GetState(self.db, keyTrie)
+		return stateObject.GetState(self.db, hash)
 	}
-	return []byte{}
+	return common.Hash{}
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
-func (self *StateDB) GetCommittedState(addr common.Address, key []byte) []byte {
+func (self *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
-		var buffer bytes.Buffer
-		buffer.WriteString(addr.String())
-		buffer.WriteString(string(key))
-		key := buffer.String()
-		value := stateObject.GetCommittedState(self.db, key)
-		return value
+		return stateObject.GetCommittedState(self.db, hash)
 	}
-	return []byte{}
+	return common.Hash{}
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.
@@ -352,54 +330,12 @@ func (self *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
-func (self *StateDB) SetState(address common.Address, key, value []byte) {
-	self.lock.Lock()
-	stateObject := self.GetOrNewStateObject(address)
-	keyTrie, valueKey, value := getKeyValue(address, key, value)
+func (self *StateDB) SetState(addr common.Address, key, value common.Hash) {
+	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetState(self.db, keyTrie, valueKey, value)
+		stateObject.SetState(self.db, key, value)
 	}
-	self.lock.Unlock()
 }
-
-func getKeyValue(address common.Address, key []byte, value []byte) (string, common.Hash, []byte) {
-	var buffer bytes.Buffer
-	buffer.WriteString(address.String())
-	buffer.WriteString(string(key))
-	keyTrie := buffer.String()
-
-	//if value != nil && !bytes.Equal(value,[]byte{}){
-	buffer.Reset()
-	buffer.WriteString(storagePrefix)
-	buffer.WriteString(string(value))
-
-	valueKey := common.Hash{}
-	keccak := sha3.NewKeccak256()
-	keccak.Write(buffer.Bytes())
-	keccak.Sum(valueKey[:0])
-
-	return keyTrie, valueKey, value
-	//}
-	//return keyTrie, common.Hash{}, value
-}
-
-
-/*func getKeyValue(address common.Address, key []byte, value []byte) (string, common.Hash, []byte) {
-	var buffer bytes.Buffer
-	buffer.WriteString(address.String())
-	buffer.WriteString(string(key))
-	keyTrie := buffer.String()
-
-	//if value != nil && !bytes.Equal(value,[]byte{}){
-	buffer.Reset()
-	buffer.WriteString(string(key))
-	buffer.WriteString(string(value))
-	valueKey := sha3.Sum256(buffer.Bytes())
-	return keyTrie, valueKey, value
-	//}
-	//return keyTrie, common.Hash{}, value
-}*/
-
 
 // Suicide marks the given account as suicided.
 // This clears the account balance.
@@ -515,14 +451,6 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (self *StateDB) TxHash() common.Hash {
-	return self.thash
-}
-
-func (self *StateDB) TxIdx() uint32 {
-	return uint32(self.txIndex)
-}
-
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
 	so := db.getStateObject(addr)
 	if so == nil {
@@ -531,8 +459,8 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if value, dirty := so.dirtyValueStorage[key]; dirty {
-			cb(key, common.BytesToHash(value))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			cb(key, value)
 			continue
 		}
 		cb(key, common.BytesToHash(it.Value))
@@ -556,7 +484,6 @@ func (self *StateDB) Copy() *StateDB {
 		logSize:           self.logSize,
 		preimages:         make(map[common.Hash][]byte),
 		journal:           newJournal(),
-		tickeCache:        self.tickeCache.TicketCaceheSnapshot(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range self.journal.dirties {
@@ -589,7 +516,6 @@ func (self *StateDB) Copy() *StateDB {
 	for hash, preimage := range self.preimages {
 		state.preimages[hash] = preimage
 	}
-
 	return state
 }
 
@@ -673,9 +599,6 @@ func (s *StateDB) clearJournalAndRefund() {
 
 // Commit writes the state to the underlying in-memory trie database.
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	defer s.clearJournalAndRefund()
 
 	for addr := range s.journal.dirties {
@@ -719,110 +642,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		return nil
 	})
-
 	log.Debug("Trie cache stats after commit", "misses", trie.CacheMisses(), "unloads", trie.CacheUnloads())
 	return root, err
-}
-
-func (self *StateDB) SetInt32(addr common.Address, key []byte, value int32) {
-	self.SetState(addr, key, common.Int32ToBytes(value))
-}
-func (self *StateDB) SetInt64(addr common.Address, key []byte, value int64) {
-	self.SetState(addr, key, common.Int64ToBytes(value))
-}
-func (self *StateDB) SetFloat32(addr common.Address, key []byte, value float32) {
-	self.SetState(addr, key, common.Float32ToBytes(value))
-}
-func (self *StateDB) SetFloat64(addr common.Address, key []byte, value float64) {
-	self.SetState(addr, key, common.Float64ToBytes(value))
-}
-func (self *StateDB) SetString(addr common.Address, key []byte, value string) {
-	self.SetState(addr, key, []byte(value))
-}
-func (self *StateDB) SetByte(addr common.Address, key []byte, value byte) {
-	self.SetState(addr, key, []byte{value})
-}
-
-func (self *StateDB) GetInt32(addr common.Address, key []byte) int32 {
-	return common.BytesToInt32(self.GetState(addr, key))
-}
-func (self *StateDB) GetInt64(addr common.Address, key []byte) int64 {
-	return common.BytesToInt64(self.GetState(addr, key))
-}
-func (self *StateDB) GetFloat32(addr common.Address, key []byte) float32 {
-	return common.BytesToFloat32(self.GetState(addr, key))
-}
-func (self *StateDB) GetFloat64(addr common.Address, key []byte) float64 {
-	return common.BytesToFloat64(self.GetState(addr, key))
-}
-func (self *StateDB) GetString(addr common.Address, key []byte) string {
-	return string(self.GetState(addr, key))
-}
-func (self *StateDB) GetByte(addr common.Address, key []byte) byte {
-	ret := self.GetState(addr, key)
-	//if len(ret) != 1{
-	//	return byte('')
-	//}
-	return ret[0]
-}
-
-// todo: new method -> GetAbiHash
-func (s *StateDB) GetAbiHash(addr common.Address) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
-		return common.Hash{}
-	}
-	return common.BytesToHash(stateObject.AbiHash())
-}
-
-// todo: new method -> GetAbi
-func (s *StateDB) GetAbi(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Abi(s.db)
-	}
-	return nil
-}
-
-// todo: new method -> SetAbi
-func (s *StateDB) SetAbi(addr common.Address, abi []byte) {
-	stateObject := s.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetAbi(crypto.Keccak256Hash(abi), abi)
-	}
-}
-
-//ppos add
-func (self *StateDB) AppendTicketCache(nodeid discover.NodeID, tids []common.Hash) {
-	self.tclock.Lock()
-	self.tickeCache.AppendTicketCache(nodeid, tids)
-	self.tclock.Unlock()
-}
-
-func (self *StateDB) GetTicketCache(nodeid discover.NodeID) (ret []common.Hash, err error) {
-	self.tclock.RLock()
-	ret, err = self.tickeCache.GetTicketCache(nodeid)
-	defer self.tclock.RUnlock()
-	return
-}
-
-func (self *StateDB) RemoveTicketCache(nodeid discover.NodeID, tids []common.Hash) (err error) {
-	self.tclock.Lock()
-	err = self.tickeCache.RemoveTicketCache(nodeid, tids)
-	self.tclock.Unlock()
-	return
-}
-
-func (self *StateDB) TCount(nodeid discover.NodeID) (ret uint64) {
-	self.tclock.RLock()
-	ret = self.tickeCache.TCount(nodeid)
-	self.tclock.RUnlock()
-	return ret
-}
-
-func (self *StateDB) TicketCaceheSnapshot() (ret ticketcache.TicketCache) {
-	self.tclock.RLock()
-	ret = self.tickeCache.TicketCaceheSnapshot()
-	self.tclock.RUnlock()
-	return
 }

@@ -26,8 +26,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
-	"github.com/PlatONnetwork/PlatON-Go/crypto/sha3"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 // Lengths of hashes and addresses in bytes.
@@ -35,20 +35,12 @@ const (
 	// HashLength is the expected length of the hash
 	HashLength = 32
 	// AddressLength is the expected length of the address
-	AddressLength          = 20
-	BlockConfirmSignLength = 65
+	AddressLength = 20
 )
 
 var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
-
-
-
-	RewardPoolAddr    = HexToAddress("0x1000000000000000000000000000000000000000")
-	CandidatePoolAddr = HexToAddress("0x1000000000000000000000000000000000000001")
-	TicketPoolAddr    = HexToAddress("0x1000000000000000000000000000000000000002")
-	ZeroAddr          = HexToAddress(Address{}.String())
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -78,12 +70,6 @@ func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 
 // Hex converts a hash to a hex string.
 func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
-
-// Hex converts a hash to a hex string with no prefix of 0x.
-func (h Hash) HexWithNoPrefix() string {
-	hex := hexutil.Encode(h[:])
-	return strings.TrimPrefix(hex, "0x")
-}
 
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
@@ -229,27 +215,6 @@ func (a Address) Hex() string {
 	return "0x" + string(result)
 }
 
-func (a Address) HexWithNoPrefix() string {
-	unchecksummed := hex.EncodeToString(a[:])
-	sha := sha3.NewKeccak256()
-	sha.Write([]byte(unchecksummed))
-	hash := sha.Sum(nil)
-
-	result := []byte(unchecksummed)
-	for i := 0; i < len(result); i++ {
-		hashByte := hash[i/2]
-		if i%2 == 0 {
-			hashByte = hashByte >> 4
-		} else {
-			hashByte &= 0xf
-		}
-		if result[i] > '9' && hashByte > 7 {
-			result[i] -= 32
-		}
-	}
-	return string(result)
-}
-
 // String implements fmt.Stringer.
 func (a Address) String() string {
 	return a.Hex()
@@ -374,16 +339,4 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 // Original returns the mixed-case input string
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
-}
-
-type BlockConfirmSign [BlockConfirmSignLength]byte
-
-func (sig *BlockConfirmSign) String() string {
-	return fmt.Sprintf("%x", sig[:])
-}
-
-func NewBlockConfirmSign(signSlice []byte) *BlockConfirmSign {
-	var sign BlockConfirmSign
-	copy(sign[:], signSlice[:])
-	return &sign
 }

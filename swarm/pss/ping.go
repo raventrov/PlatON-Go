@@ -23,9 +23,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/protocols"
-	"github.com/PlatONnetwork/PlatON-Go/swarm/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // Generic ping protocol implementation for

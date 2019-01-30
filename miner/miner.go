@@ -18,21 +18,19 @@
 package miner
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/core/cbfttypes"
 	"fmt"
-	"math/big"
 	"sync/atomic"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/eth/downloader"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Backend wraps all methods required for mining.
@@ -54,14 +52,13 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, recommit time.Duration, gasFloor, gasCeil uint64, isLocalBlock func(block *types.Block) bool,
-	blockSignatureCh chan *cbfttypes.BlockSignature, cbftResultCh chan *cbfttypes.CbftResult, highestLogicalBlockCh chan *types.Block, blockChainCache *core.BlockChainCache) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, recommit time.Duration, gasFloor, gasCeil uint64, isLocalBlock func(block *types.Block) bool) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
 		exitCh:   make(chan struct{}),
-		worker:   newWorker(config, engine, eth, mux, recommit, gasFloor, gasCeil, isLocalBlock, blockSignatureCh, cbftResultCh, highestLogicalBlockCh, blockChainCache),
+		worker:   newWorker(config, engine, eth, mux, recommit, gasFloor, gasCeil, isLocalBlock),
 		canStart: 1,
 	}
 	go miner.update()
@@ -98,10 +95,6 @@ func (self *Miner) update() {
 				atomic.StoreInt32(&self.shouldStart, 0)
 				if shouldStart {
 					self.Start(self.coinbase)
-				}
-
-				if cbft, ok := self.engine.(consensus.Bft); ok {
-					cbft.OnBlockSynced()
 				}
 				// stop immediately and ignore all further pending events
 				return
@@ -174,20 +167,4 @@ func (self *Miner) PendingBlock() *types.Block {
 func (self *Miner) SetEtherbase(addr common.Address) {
 	self.coinbase = addr
 	self.worker.setEtherbase(addr)
-}
-
-func (self *Miner) InitConsensusPeerFn(addFn addConsensusPeerFn) {
-	self.worker.InitConsensusPeerFn(addFn)
-}
-
-func (self *Miner) ShouldElection(blockNumber *big.Int) bool {
-	return self.worker.shouldElection(blockNumber)
-}
-
-func (self *Miner) ShouldSwitch(blockNumber *big.Int) bool {
-	return self.worker.shouldSwitch(blockNumber)
-}
-
-func (self *Miner) AttemptAddConsensusPeer(blockNumber *big.Int, state *state.StateDB) {
-	self.worker.attemptAddConsensusPeer(blockNumber, state)
 }

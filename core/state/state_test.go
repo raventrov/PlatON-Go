@@ -17,18 +17,14 @@
 package state
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/trie"
 	"bytes"
-	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	checker "gopkg.in/check.v1"
-	//"github.com/PlatONnetwork/PlatON-Go/rlp"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
 )
 
 type StateSuite struct {
@@ -92,24 +88,22 @@ func (s *StateSuite) TestDump(c *checker.C) {
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
 	s.db = ethdb.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db), big.NewInt(0), common.Hash{})
+	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 }
 
 func (s *StateSuite) TestNull(c *checker.C) {
 	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
 	s.state.CreateAccount(address)
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
-	//value := nil
-	key := []byte{}
+	var value common.Hash
 
-	//s.state.SetState(address, common.Hash{}, value)
-	s.state.SetState(address, key, nil)
+	s.state.SetState(address, common.Hash{}, value)
 	s.state.Commit(false)
 
-	if value := s.state.GetState(address, common.Hash{}.Bytes()); bytes.Compare(value, common.Hash{}.Bytes()) != 0 {
+	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		c.Errorf("expected empty current value, got %x", value)
 	}
-	if value := s.state.GetCommittedState(address, key); !bytes.Equal(value, []byte{}) {
+	if value := s.state.GetCommittedState(address, common.Hash{}); value != (common.Hash{}) {
 		c.Errorf("expected empty committed value, got %x", value)
 	}
 }
@@ -124,20 +118,20 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	genesis := s.state.Snapshot()
 
 	// set initial state object value
-	s.state.SetState(stateobjaddr, storageaddr.Bytes(), data1.Bytes())
+	s.state.SetState(stateobjaddr, storageaddr, data1)
 	snapshot := s.state.Snapshot()
 
 	// set a new state object value, revert it and ensure correct content
-	s.state.SetState(stateobjaddr, storageaddr.Bytes(), data2.Bytes())
+	s.state.SetState(stateobjaddr, storageaddr, data2)
 	s.state.RevertToSnapshot(snapshot)
 
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr.Bytes()), checker.DeepEquals, data1)
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr.Bytes()), checker.DeepEquals, common.Hash{})
+	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, data1)
+	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
 
 	// revert up to the genesis state and ensure correct content
 	s.state.RevertToSnapshot(genesis)
-	c.Assert(s.state.GetState(stateobjaddr, storageaddr.Bytes()), checker.DeepEquals, common.Hash{})
-	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr.Bytes()), checker.DeepEquals, common.Hash{})
+	c.Assert(s.state.GetState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
+	c.Assert(s.state.GetCommittedState(stateobjaddr, storageaddr), checker.DeepEquals, common.Hash{})
 }
 
 func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
@@ -147,17 +141,17 @@ func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
 // use testing instead of checker because checker does not support
 // printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+	state, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))
-	var storageaddr common.Address
+	var storageaddr common.Hash
 
 	data0 := common.BytesToHash([]byte{17})
 	data1 := common.BytesToHash([]byte{18})
 
-	state.SetState(stateobjaddr0, storageaddr.Bytes(), data0.Bytes())
-	state.SetState(stateobjaddr1, storageaddr.Bytes(), data1.Bytes())
+	state.SetState(stateobjaddr0, storageaddr, data0)
+	state.SetState(stateobjaddr1, storageaddr, data1)
 
 	// db, trie are already non-empty values
 	so0 := state.getStateObject(stateobjaddr0)
@@ -190,8 +184,7 @@ func TestSnapshot2(t *testing.T) {
 
 	so0Restored := state.getStateObject(stateobjaddr0)
 	// Update lazily-loaded values before comparing.
-	key, _, _ := getKeyValue(stateobjaddr0, storageaddr.Bytes(), nil)
-	so0Restored.GetState(state.db, key)
+	so0Restored.GetState(state.db, storageaddr)
 	so0Restored.Code(state.db)
 	// non-deleted is equal (restored)
 	compareStateObjects(so0Restored, so0, t)
@@ -249,166 +242,4 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 			t.Errorf("Origin storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
-}
-
-func TestEmptyByte(t *testing.T) {
-	db := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(db), big.NewInt(0), common.Hash{})
-
-	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
-	state.CreateAccount(address)
-	so := state.getStateObject(address)
-
-	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
-	//pvalue := []byte("b")
-	type Candidate struct {
-		Deposit			uint64
-		BlockNumber 	*big.Int
-		TxIndex 		uint32
-		CandidateId 	string
-		Host 			string
-		Port 			string
-	}
-	can := Candidate{Deposit: 100, BlockNumber: new(big.Int).SetUint64(12), CandidateId: "AA", Host: "10.0.0.0"}
-	prefix := []byte("im")
-	pvalue, _ := rlp.EncodeToBytes(&can)
-	key := append(prefix, []byte("a")...)
-	state.SetState(address, key, pvalue)
-	//state.Commit(false)
-
-	if value := state.GetState(address, key); !bytes.Equal(value, pvalue) {
-		t.Errorf("expected empty current value, got %x", value)
-	}else{
-		var can Candidate
-		rlp.DecodeBytes(value, &can)
-		fmt.Printf("%+v \n", can)
-	}
-
-	//if value := state.GetCommittedState(address, key); !bytes.Equal(value, pvalue) {
-	//	t.Errorf("expected empty committed value, got %x", value)
-	//}
-
-	state.trie.NodeIterator(nil)
-	it := trie.NewIterator(so.trie.NodeIterator(nil))
-	for it.Next() {
-		var a Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &a)
-		fmt.Println("Initialize comparison key-value pairs", string(so.db.trie.GetKey(it.Key)), "== ", &a)
-	}
-
-	can2 := Candidate{Deposit: 100, BlockNumber: new(big.Int).SetUint64(12), CandidateId: "OK", Host: "10.0.0.0"}
-	prefix2 := []byte("im")
-	pvalue2, _ := rlp.EncodeToBytes(&can2)
-	key2 := append(prefix2, []byte("b")...)
-	state.SetState(address, key2, pvalue2)
-	//state.Commit(false)
-
-	if value := state.GetState(address, key2); !bytes.Equal(value, pvalue2) {
-		t.Errorf("expected empty current value, got %x", value)
-	}else{
-		var can Candidate
-		rlp.DecodeBytes(value, &can)
-		fmt.Printf("%+v \n", can)
-	}
-	//if value := state.GetCommittedState(address, key2); !bytes.Equal(value, pvalue2) {
-	//	t.Errorf("expected empty committed value, got %x", value)
-	//}
-
-	state.trie.NodeIterator(nil)
-	it = trie.NewIterator(so.trie.NodeIterator(nil))
-	for it.Next() {
-		var a Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &a)
-		fmt.Println("Compare key-value pairs after adding", string(so.db.trie.GetKey(it.Key)), "== ", &a)
-	}
-
-
-
-	pvalue = []byte{}
-	state.SetState(address, key, pvalue)
-	//state.Commit(false)
-
-	if value := state.GetState(address, key); !bytes.Equal(value, pvalue) {
-		t.Errorf("expected empty current value, got %x", value)
-	}
-	//if value := state.GetCommittedState(address, key); !bytes.Equal(value, pvalue) {
-	//	t.Errorf("expected empty committed value, got %x", value)
-	//}
-
-	state.trie.NodeIterator(nil)
-	it = trie.NewIterator(so.trie.NodeIterator(nil))
-	for it.Next() {
-		var a Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &a)
-		fmt.Println("Compare key-value pairs after deletion", string(so.db.trie.GetKey(it.Key)), "==", &a)
-	}
-
-	// insert empty value
-	key = []byte("bb")
-	pvalue = []byte{}
-	state.SetState(address, key, pvalue)
-
-	if value := state.GetState(address, key); !bytes.Equal(value, pvalue) {
-		t.Errorf("expected empty current value, got %x", value)
-	}else {
-		var a Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &a)
-		fmt.Println("Compare key-value pairs after inserting null values", string(so.db.trie.GetKey(it.Key)), "==", &a)
-	}
-	//if value := state.GetCommittedState(address, key); !bytes.Equal(value, pvalue) {
-	//	t.Errorf("expected empty committed value, got %x", value)
-	//}
-
-	state.trie.NodeIterator(nil)
-	it = trie.NewIterator(so.trie.NodeIterator(nil))
-	for it.Next() {
-		var a Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &a)
-		fmt.Println("Compare key-value pairs after inserting null values", string(so.db.trie.GetKey(it.Key)), "==", &a)
-	}
-}
-
-func TestSlice(t *testing.T){
-	db := ethdb.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(db), big.NewInt(0), common.Hash{})
-
-	address := common.HexToAddress("0x823140710bf13990e4500136726d8b55")
-	state.CreateAccount(address)
-	so := state.getStateObject(address)
-
-	type Candidate struct {
-		Deposit			uint64
-		BlockNumber 	*big.Int
-		TxIndex 		uint32
-		CandidateId 	string
-		Host 			string
-		Port 			string
-	}
-	can1 := Candidate{Deposit: 100, BlockNumber: new(big.Int).SetUint64(12), CandidateId: "AA", Host: "10.0.0.0"}
-	can2 := Candidate{Deposit: 200, BlockNumber: new(big.Int).SetUint64(13), CandidateId: "AA", Host: "127.0.0.1"}
-	arr := []*Candidate{&can1, &can2}
-	prefix := []byte("im")
-	pvalue, _ := rlp.EncodeToBytes(&arr)
-	key := append(prefix, []byte("a")...)
-	state.SetState(address, key, pvalue)
-	state.Commit(false)
-
-	if value := state.GetState(address, key); !bytes.Equal(value, pvalue) {
-		t.Errorf("expected empty current value, got %x", value)
-	}
-	if value := state.GetCommittedState(address, key); !bytes.Equal(value, pvalue) {
-		t.Errorf("expected empty committed value, got %x", value)
-	}
-
-	state.trie.NodeIterator(nil)
-	it := trie.NewIterator(so.trie.NodeIterator(nil))
-	for it.Next() {
-		var arr []*Candidate
-		rlp.DecodeBytes(so.db.trie.GetKey(it.Value), &arr)
-		fmt.Printf("Initialize comparison key-value pairs %v == &+v", string(so.db.trie.GetKey(it.Key)), &arr)
-	}
-}
-
-func TestIntermediateRoot(t *testing.T) {
-
 }

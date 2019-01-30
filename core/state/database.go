@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -57,15 +57,12 @@ type Database interface {
 
 	// TrieDB retrieves the low level trie database used for data storage.
 	TrieDB() *trie.Database
-
-	ContractAbi(addrHash, abiHash common.Hash) ([]byte, error)
 }
 
 // Trie is a Ethereum Merkle Trie.
 type Trie interface {
 	TryGet(key []byte) ([]byte, error)
 	TryUpdate(key, value []byte) error
-	TryUpdateValue(key, value []byte) error
 	TryDelete(key []byte) error
 	Commit(onleaf trie.LeafCallback) (common.Hash, error)
 	Hash() common.Hash
@@ -79,7 +76,6 @@ type Trie interface {
 // intermediate trie-node memory pool between the low level storage layer and the
 // high level trie abstraction.
 func NewDatabase(db ethdb.Database) Database {
-	//LRU
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
 		db:            trie.NewDatabase(db),
@@ -94,7 +90,7 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache
 }
 
-//OpenTrie opens the main account trie.
+// OpenTrie opens the main account trie.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -147,12 +143,6 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 		db.codeSizeCache.Add(codeHash, len(code))
 	}
 	return code, err
-}
-
-// ContractAbi retrieves a particular contract's abi.
-func (db *cachingDB) ContractAbi(addrHash, abiHash common.Hash) ([]byte, error) {
-	abi, err := db.db.Node(abiHash)
-	return abi, err
 }
 
 // ContractCodeSize retrieves a particular contracts code's size.

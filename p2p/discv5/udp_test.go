@@ -26,9 +26,9 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
@@ -56,7 +56,7 @@ var (
 // 		pipe:       newpipe(),
 // 		localkey:   newkey(),
 // 		remotekey:  newkey(),
-// 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 16789},
+// 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
 // 	}
 // 	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
 // 	return test

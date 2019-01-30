@@ -21,16 +21,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
-	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr), head.Number, head.Hash())
+	state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr))
 	return state
 }
 
@@ -85,20 +85,6 @@ func (db *odrDatabase) ContractCodeSize(addrHash, codeHash common.Hash) (int, er
 	return len(code), err
 }
 
-func (db *odrDatabase) ContractAbi(addrHash, abiHash common.Hash) ([]byte, error) {
-	if abiHash == sha3_nil {
-		return nil, nil
-	}
-	if abi, err := db.backend.Database().Get(abiHash[:]); err == nil {
-		return abi, nil
-	}
-	id := *db.id
-	id.AccKey = addrHash[:]
-	req := &CodeRequest{Id: &id, Hash: abiHash}
-	err := db.backend.Retrieve(db.ctx, req)
-	return req.Data, err
-}
-
 func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
@@ -124,11 +110,6 @@ func (t *odrTrie) TryUpdate(key, value []byte) error {
 	return t.do(key, func() error {
 		return t.trie.TryDelete(key)
 	})
-}
-
-//todo
-func (t *odrTrie) TryUpdateValue(key, value []byte) error {
-	return nil
 }
 
 func (t *odrTrie) TryDelete(key []byte) error {

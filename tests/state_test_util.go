@@ -23,18 +23,18 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
-	"github.com/PlatONnetwork/PlatON-Go/common/math"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/crypto/sha3"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // StateTest checks transaction processing without block context.
@@ -170,18 +170,18 @@ func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
 
 func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
 	sdb := state.NewDatabase(db)
-	statedb, _ := state.New(common.Hash{}, sdb, big.NewInt(0), common.Hash{})
+	statedb, _ := state.New(common.Hash{}, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
 		statedb.SetBalance(addr, a.Balance)
 		for k, v := range a.Storage {
-			statedb.SetState(addr, k.Bytes(), v.Bytes())
+			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
 	root, _ := statedb.Commit(false)
-	statedb, _ = state.New(root, sdb, big.NewInt(0), common.Hash{})
+	statedb, _ = state.New(root, sdb)
 	return statedb
 }
 
@@ -189,6 +189,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return &core.Genesis{
 		Config:     config,
 		Coinbase:   t.json.Env.Coinbase,
+		Difficulty: t.json.Env.Difficulty,
 		GasLimit:   t.json.Env.GasLimit,
 		Number:     t.json.Env.Number,
 		Timestamp:  t.json.Env.Timestamp,

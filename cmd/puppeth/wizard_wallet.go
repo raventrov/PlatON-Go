@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // deployWallet creates a new web wallet based on some user input.
@@ -46,7 +46,7 @@ func (w *wizard) deployWallet() {
 	infos, err := checkWallet(client, w.network)
 	if err != nil {
 		infos = &walletInfos{
-			nodePort: 16789, rpcPort: 6789, webPort: 80, webHost: client.server,
+			nodePort: 30303, rpcPort: 8545, webPort: 80, webHost: client.server,
 		}
 	}
 	existed := err == nil

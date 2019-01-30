@@ -18,15 +18,16 @@ package les
 
 import (
 	"fmt"
+	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/light"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // lesCommons contains fields needed by both server and client.
@@ -42,6 +43,7 @@ type lesCommons struct {
 // known about the host peer.
 type NodeInfo struct {
 	Network    uint64                   `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3, Rinkeby=4)
+	Difficulty *big.Int                 `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash              `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Config     *params.ChainConfig      `json:"config"`     // Chain configuration for the fork rules
 	Head       common.Hash              `json:"head"`       // SHA3 hash of the host's best owned block
@@ -105,8 +107,11 @@ func (c *lesCommons) nodeInfo() interface{} {
 	}
 
 	chain := c.protocolManager.blockchain
+	head := chain.CurrentHeader()
+	hash := head.Hash()
 	return &NodeInfo{
 		Network:    c.config.NetworkId,
+		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
 		Head:       chain.CurrentHeader().Hash(),

@@ -24,19 +24,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ChainIndexerBackend defines the methods needed to process chain segments in
 // the background and write the segment results into the database. These can be
 // used to create filter blooms or CHTs.
 type ChainIndexerBackend interface {
-
 	// Reset initiates the processing of a new chain segment, potentially terminating
 	// any partially completed operations (in case of a reorg).
 	Reset(ctx context.Context, section uint64, prevHead common.Hash) error

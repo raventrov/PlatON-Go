@@ -26,14 +26,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/mclock"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discv5"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/nat"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/netutil"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 const (
@@ -62,8 +62,6 @@ type Config struct {
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
 	MaxPeers int
-
-	MaxConsensusPeers int
 
 	// MaxPendingPeers is the maximum number of peers that can be pending in the
 	// handshake phase, counted separately for inbound and outbound connections.
@@ -172,8 +170,6 @@ type Server struct {
 	quit          chan struct{}
 	addstatic     chan *discover.Node
 	removestatic  chan *discover.Node
-	addconsensus	chan *discover.Node
-	removeconsensus	chan *discover.Node
 	addtrusted    chan *discover.Node
 	removetrusted chan *discover.Node
 	posthandshake chan *conn
@@ -199,7 +195,6 @@ const (
 	staticDialedConn
 	inboundConn
 	trustedConn
-	consensusDialedConn
 )
 
 // conn wraps a network connection with information gathered
@@ -250,9 +245,6 @@ func (f connFlag) String() string {
 	}
 	if f&inboundConn != 0 {
 		s += "-inbound"
-	}
-	if f&consensusDialedConn != 0 {
-		s += "-consensusdial"
 	}
 	if s != "" {
 		s = s[1:]
@@ -323,21 +315,6 @@ func (srv *Server) AddPeer(node *discover.Node) {
 func (srv *Server) RemovePeer(node *discover.Node) {
 	select {
 	case srv.removestatic <- node:
-	case <-srv.quit:
-	}
-}
-
-func (srv *Server) AddConsensusPeer(node *discover.Node) {
-	select {
-	case srv.addconsensus <- node:
-	case <-srv.quit:
-	}
-}
-
-// RemovePeer disconnects from the given node
-func (srv *Server) RemoveConsensusPeer(node *discover.Node) {
-	select {
-	case srv.removeconsensus <- node:
 	case <-srv.quit:
 	}
 }
@@ -470,8 +447,6 @@ func (srv *Server) Start() (err error) {
 	srv.posthandshake = make(chan *conn)
 	srv.addstatic = make(chan *discover.Node)
 	srv.removestatic = make(chan *discover.Node)
-	srv.addconsensus = make(chan *discover.Node)
-	srv.removeconsensus = make(chan *discover.Node)
 	srv.addtrusted = make(chan *discover.Node)
 	srv.removetrusted = make(chan *discover.Node)
 	srv.peerOp = make(chan peerOpFunc)
@@ -547,7 +522,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	dynPeers := srv.maxDialedConns()
-	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict, srv.MaxConsensusPeers)
+	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)
 
 	// handshake
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
@@ -597,10 +572,6 @@ type dialer interface {
 	taskDone(task, time.Time)
 	addStatic(*discover.Node)
 	removeStatic(*discover.Node)
-	addConsensus(*discover.Node)
-	removeConsensus(*discover.Node)
-	removeConsensusFromQueue(*discover.Node)
-	initRemoveConsensusPeerFn(removeConsensusPeerFn removeConsensusPeerFn)
 }
 
 func (srv *Server) run(dialstate dialer) {
@@ -612,7 +583,6 @@ func (srv *Server) run(dialstate dialer) {
 		taskdone     = make(chan task, maxActiveDialTasks)
 		runningTasks []task
 		queuedTasks  []task // tasks that can't run yet
-
 	)
 	// Put trusted nodes into a map to speed up checks.
 	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
@@ -649,14 +619,6 @@ func (srv *Server) run(dialstate dialer) {
 			queuedTasks = append(queuedTasks, startTasks(nt)...)
 		}
 	}
-	dialstateRemoveConsensusPeerFn := func(node *discover.Node) {
-		srv.log.Trace("Removing consensus node from dialstate", "node", node)
-		dialstate.removeConsensusFromQueue(node)
-		if p, ok := peers[node.ID]; ok {
-			p.Disconnect(DiscRequested)
-		}
-	}
-	dialstate.initRemoveConsensusPeerFn(dialstateRemoveConsensusPeerFn)
 
 running:
 	for {
@@ -678,15 +640,6 @@ running:
 			// stop keeping the node connected.
 			srv.log.Trace("Removing static node", "node", n)
 			dialstate.removeStatic(n)
-			if p, ok := peers[n.ID]; ok {
-				p.Disconnect(DiscRequested)
-			}
-		case n := <-srv.addconsensus:
-			srv.log.Trace("Adding consensus node", "node", n)
-			dialstate.addConsensus(n)
-		case n := <-srv.removeconsensus:
-			srv.log.Trace("Removing consensus node", "node", n)
-			dialstate.removeConsensus(n)
 			if p, ok := peers[n.ID]; ok {
 				p.Disconnect(DiscRequested)
 			}
@@ -808,9 +761,9 @@ func (srv *Server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, inbound
 
 func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCount int, c *conn) error {
 	switch {
-	case !c.is(trustedConn|staticDialedConn|consensusDialedConn) && len(peers) >= srv.MaxPeers:
+	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
-	case !c.is(trustedConn|consensusDialedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.id] != nil:
 		return DiscAlreadyConnected

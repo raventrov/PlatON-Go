@@ -18,16 +18,13 @@
 package consensus
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/cbfttypes"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rpc"
-	"crypto/ecdsa"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // ChainReader defines a small collection of methods needed to access the local
@@ -99,6 +96,10 @@ type Engine interface {
 	// SealHash returns the hash of a block prior to it being sealed.
 	SealHash(header *types.Header) common.Hash
 
+	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
+	// that a new block should have.
+	CalcDifficulty(chain ChainReader, time uint64, parent *types.Header) *big.Int
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API
 
@@ -112,69 +113,4 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
-}
-
-type Bft interface {
-	Engine
-
-	// the former round of consensus node ids
-	//FormerNodeID() []discover.NodeID
-
-	// the former round of consensus nodes
-	//FormerNodes(parentNumber *big.Int, parentHash common.Hash, blockNumber *big.Int) []*discover.Node
-
-	// the current round of consensus node ids
-	//CurrentNodeID() []discover.NodeID
-
-	// the current round of consensus nodes
-	CurrentNodes(parentNumber *big.Int, parentHash common.Hash, blockNumber *big.Int) []*discover.Node
-
-	IsCurrentNode(parentNumber *big.Int, parentHash common.Hash, blockNumber *big.Int) bool
-
-	ConsensusNodes(parentNumber *big.Int, parentHash common.Hash, blockNumber *big.Int) []discover.NodeID
-
-	// whether the current node should packing
-	ShouldSeal(parentNumber *big.Int, parentHash common.Hash, commitNumber *big.Int) bool
-
-	// received a new block signature
-	// verify if the signature is signed by nodeID
-	OnBlockSignature(chain ChainReader, nodeID discover.NodeID, sig *cbfttypes.BlockSignature) error
-
-	// Process the BFT signatures
-	OnNewBlock(chain ChainReader, block *types.Block) error
-
-	// Process the BFT signatures
-	OnPong(nodeID discover.NodeID, netLatency int64) error
-
-	// Send a signal if a block synced from other peer.
-	OnBlockSynced()
-	//CheckConsensusNode(nodeID discover.NodeID) (bool, error)
-
-	//IsConsensusNode() (bool, error)
-
-	// At present, the highest reasonable block, when the node is out of the block, it needs to generate the block based on the highest reasonable block.
-	HighestLogicalBlock() *types.Block
-
-	HighestConfirmedBlock() *types.Block
-
-	GetBlock(hash common.Hash, number uint64) *types.Block
-	SetPrivateKey(privateKey *ecdsa.PrivateKey)
-
-	Election(state *state.StateDB, parentHash common.Hash, blockNumber *big.Int) ([]*discover.Node, error)
-
-	Switch(state *state.StateDB) bool
-
-	GetWitness(state *state.StateDB, flag int) ([]*discover.Node, error)
-
-	GetOwnNodeID() discover.NodeID
-
-	SetNodeCache(state *state.StateDB, parentNumber, currentNumber *big.Int, parentHash, currentHash common.Hash) error
-
-	Notify(state vm.StateDB, blockNumber *big.Int) error
-
-	StoreHash(state *state.StateDB)
-
-	Submit2Cache(state *state.StateDB, currBlocknumber *big.Int, blockInterval *big.Int, currBlockhash common.Hash)
-
-	ForEachStorage(state *state.StateDB, title string)
 }

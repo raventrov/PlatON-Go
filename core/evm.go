@@ -19,10 +19,10 @@ package core
 import (
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -52,7 +52,7 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).Set(header.Time),
-		//Difficulty:  new(big.Int).Set(header.Difficulty),
+		Difficulty:  new(big.Int).Set(header.Difficulty),
 		GasLimit:    header.GasLimit,
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 	}

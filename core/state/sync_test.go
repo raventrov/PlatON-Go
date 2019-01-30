@@ -21,10 +21,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // testAccount is the data associated with an account used by the state tests.
@@ -39,7 +39,7 @@ type testAccount struct {
 func makeTestState() (Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := NewDatabase(ethdb.NewMemDatabase())
-	state, _ := New(common.Hash{}, db, big.NewInt(0), common.Hash{})
+	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}
@@ -70,7 +70,7 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(db), big.NewInt(0), common.Hash{})
+	state, err := New(root, NewDatabase(db))
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -111,7 +111,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent.
 	}
-	state, err := New(root, NewDatabase(db), big.NewInt(0), common.Hash{})
+	state, err := New(root, NewDatabase(db))
 	if err != nil {
 		return err
 	}

@@ -21,13 +21,12 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/math"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/crypto/bn256"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/bn256"
+	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
-	"github.com/PlatONnetwork/PlatON-Go/log"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -62,7 +61,6 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	log.Info("IN PPOS PrecompiledContractsPpos RUN Previous ... ")
 	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
 		return p.Run(input)

@@ -17,19 +17,18 @@
 package clique
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
 	"bytes"
 	"crypto/ecdsa"
 	"sort"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
@@ -81,8 +80,8 @@ func (ap *testerAccountPool) sign(header *types.Header, signer string) {
 		ap.accounts[signer], _ = crypto.GenerateKey()
 	}
 	// Sign the header and embed the signature in extra data
-	sig, _ := crypto.Sign(consensus.SigHash(header).Bytes(), ap.accounts[signer])
-	copy(header.Extra[len(header.Extra)-consensus.ExtraSeal:], sig)
+	sig, _ := crypto.Sign(sigHash(header).Bytes(), ap.accounts[signer])
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
 }
 
 // testerVote represents a single block signed by a parcitular account, where
@@ -395,7 +394,7 @@ func TestClique(t *testing.T) {
 		}
 		// Create the genesis block with the initial set of signers
 		genesis := &core.Genesis{
-			ExtraData: make([]byte, extraVanity+common.AddressLength*len(signers)+consensus.ExtraSeal),
+			ExtraData: make([]byte, extraVanity+common.AddressLength*len(signers)+extraSeal),
 		}
 		for j, signer := range signers {
 			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
@@ -429,9 +428,9 @@ func TestClique(t *testing.T) {
 			if j > 0 {
 				header.ParentHash = blocks[j-1].Hash()
 			}
-			header.Extra = make([]byte, extraVanity+consensus.ExtraSeal)
+			header.Extra = make([]byte, extraVanity+extraSeal)
 			if auths := tt.votes[j].checkpoint; auths != nil {
-				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+consensus.ExtraSeal)
+				header.Extra = make([]byte, extraVanity+len(auths)*common.AddressLength+extraSeal)
 				accounts.checkpoint(header, auths)
 			}
 			header.Difficulty = diffInTurn // Ignored, we just need a valid number

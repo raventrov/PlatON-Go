@@ -17,14 +17,13 @@
 package eth
 
 import (
-	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -32,7 +31,7 @@ var dumper = spew.ConfigState{Indent: "    "}
 func TestStorageRangeAt(t *testing.T) {
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		state, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+		state, _ = state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
 		addr     = common.Address{0x01}
 		keys     = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),

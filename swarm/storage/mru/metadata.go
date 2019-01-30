@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 	"hash"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/swarm/storage"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // ResourceMetadata encapsulates the immutable information about a mutable resource :)

@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -175,7 +175,6 @@ func (db *LDBDatabase) Meter(prefix string) {
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 //
-
 // This is how a stats table look like (currently):
 //   Compactions
 //    Level |   Tables   |    Size(MB)   |    Time(sec)  |    Read(MB)   |   Write(MB)
@@ -192,7 +191,6 @@ func (db *LDBDatabase) Meter(prefix string) {
 // Read(MB):3895.04860 Write(MB):3654.64712
 func (db *LDBDatabase) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
-	// index 0 -> current , index 1 -> previous
 	compactions := make([][]float64, 2)
 	for i := 0; i < 2; i++ {
 		compactions[i] = make([]float64, 3)

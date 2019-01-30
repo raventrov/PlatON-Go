@@ -30,17 +30,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/mclock"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/les"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/websocket"
 )
 
@@ -475,6 +475,8 @@ type blockStats struct {
 	Miner      common.Address `json:"miner"`
 	GasUsed    uint64         `json:"gasUsed"`
 	GasLimit   uint64         `json:"gasLimit"`
+	Diff       string         `json:"difficulty"`
+	TotalDiff  string         `json:"totalDifficulty"`
 	Txs        []txStats      `json:"transactions"`
 	TxHash     common.Hash    `json:"transactionsRoot"`
 	Root       common.Hash    `json:"stateRoot"`
@@ -521,6 +523,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
 		header *types.Header
+		td     *big.Int
 		txs    []txStats
 		uncles []*types.Header
 	)
@@ -530,6 +533,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			block = s.eth.BlockChain().CurrentBlock()
 		}
 		header = block.Header()
+		td = s.eth.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
@@ -543,6 +547,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		} else {
 			header = s.les.BlockChain().CurrentHeader()
 		}
+		td = s.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 		txs = []txStats{}
 	}
 	// Assemble and return the block stats
@@ -556,6 +561,8 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		Miner:      author,
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,
+		Diff:       header.Difficulty.String(),
+		TotalDiff:  td.String(),
 		Txs:        txs,
 		TxHash:     header.TxHash,
 		Root:       header.Root,

@@ -17,17 +17,16 @@
 package state
 
 import (
-	"math/big"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
-	statedb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+	statedb, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
 	ms := ManageState(statedb)
 	ms.StateDB.SetNonce(addr, 100)
 	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))

@@ -17,12 +17,10 @@
 package vm
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/core/ticketcache"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // StateDB is an EVM database for full state querying.
@@ -41,22 +39,13 @@ type StateDB interface {
 	SetCode(common.Address, []byte)
 	GetCodeSize(common.Address) int
 
-	// todo: new func for abi of contract.
-	GetAbiHash(common.Address) common.Hash
-	GetAbi(common.Address) []byte
-	SetAbi(common.Address, []byte)
-
 	AddRefund(uint64)
 	SubRefund(uint64)
 	GetRefund() uint64
 
-	// todo: hash -> bytes
-	GetCommittedState(common.Address, []byte) []byte
-	//GetState(common.Address, common.Hash) common.Hash
-	//SetState(common.Address, common.Hash, common.Hash)
-	GetState(common.Address, []byte) []byte
-	SetState(common.Address, []byte, []byte)
-
+	GetCommittedState(common.Address, common.Hash) common.Hash
+	GetState(common.Address, common.Hash) common.Hash
+	SetState(common.Address, common.Hash, common.Hash)
 
 	Suicide(common.Address) bool
 	HasSuicided(common.Address) bool
@@ -75,15 +64,6 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
-
-	//ppos add
-	TxHash() common.Hash
-	TxIdx() uint32
-	AppendTicketCache(nodeid discover.NodeID, tids []common.Hash)
-	GetTicketCache(nodeid discover.NodeID) ([]common.Hash, error)
-	RemoveTicketCache(nodeid discover.NodeID, tids []common.Hash) error
-	TCount(nodeid discover.NodeID) uint64
-	TicketCaceheSnapshot() ticketcache.TicketCache
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

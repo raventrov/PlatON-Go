@@ -28,7 +28,7 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/PlatONnetwork/PlatON-Go/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/tools/imports"
 )
 

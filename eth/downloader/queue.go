@@ -22,13 +22,14 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/prque"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (
@@ -60,7 +61,6 @@ type fetchResult struct {
 	Uncles       []*types.Header
 	Transactions types.Transactions
 	Receipts     types.Receipts
-	Signatures   []*common.BlockConfirmSign
 }
 
 // queue represents hashes that are either need fetching or are being fetched
@@ -395,8 +395,6 @@ func (q *queue) Results(block bool) []*fetchResult {
 			for _, tx := range result.Transactions {
 				size += tx.Size()
 			}
-			// Recalculate the signatures result weights to prevent memory exhaustion
-			size += common.StorageSize(len(result.Signatures)*common.BlockConfirmSignLength)
 			q.resultSize = common.StorageSize(blockCacheSizeWeight)*size + (1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
 		}
 	}
@@ -458,8 +456,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 // returns a flag whether empty blocks were queued requiring processing.
 func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool, error) {
 	isNoop := func(header *types.Header) bool {
-		return false
-		//return header.TxHash == types.EmptyRootHash && header.UncleHash == types.EmptyUncleHash
+		return header.TxHash == types.EmptyRootHash && header.UncleHash == types.EmptyUncleHash
 	}
 	q.lock.Lock()
 	defer q.lock.Unlock()
@@ -767,7 +764,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and
 // also wakes any threads waiting for data delivery.
-func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header, signatureLists [][]*common.BlockConfirmSign) (int, error) {
+func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLists [][]*types.Header) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -777,7 +774,6 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, uncleLi
 		}
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
-		result.Signatures = signatureLists[index]
 		return nil
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool, q.blockDonePool, bodyReqTimer, len(txLists), reconstruct)

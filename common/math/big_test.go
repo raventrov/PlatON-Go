@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {
@@ -229,8 +229,7 @@ func TestBigEndianByteAt(t *testing.T) {
 		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 500, 0x00},
 	}
 	for _, test := range tests {
-		byt := common.Hex2Bytes(test.x)
-		v := new(big.Int).SetBytes(byt)
+		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
 		actual := bigEndianByteAt(v, test.y)
 		if actual != test.exp {
 			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.x, test.y, test.exp, actual)

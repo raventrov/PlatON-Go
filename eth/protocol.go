@@ -21,11 +21,11 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/event"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Constants to match up protocol versions and messages
@@ -56,10 +56,6 @@ const (
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
-	PrepareBlockMsg   = 0x08
-	BlockSignatureMsg = 0x09
-
-	PongMsg = 0x0a
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
@@ -116,7 +112,7 @@ type txPool interface {
 type statusData struct {
 	ProtocolVersion uint32
 	NetworkId       uint64
-	BN              *big.Int
+	TD              *big.Int
 	CurrentBlock    common.Hash
 	GenesisBlock    common.Hash
 }
@@ -174,24 +170,13 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 // newBlockData is the network packet for the block propagation message.
 type newBlockData struct {
 	Block *types.Block
-}
-
-type prepareBlockData struct {
-	Block *types.Block
-}
-
-type blockSignature struct {
-	SignHash  common.Hash // signature hash，header[0:32]
-	Hash      common.Hash // blokc hash，header[:]
-	Number    *big.Int
-	Signature *common.BlockConfirmSign
+	TD    *big.Int
 }
 
 // blockBody represents the data content of a single block.
 type blockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
 	Uncles       []*types.Header      // Uncles contained within a block
-	Signatures	 []*common.BlockConfirmSign	// Signatures contained within a block
 }
 
 // blockBodiesData is the network packet for block content distribution.

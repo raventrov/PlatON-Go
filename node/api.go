@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discover"
-	"github.com/PlatONnetwork/PlatON-Go/rpc"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only
@@ -72,39 +72,6 @@ func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
 	server.RemovePeer(node)
-	return true, nil
-}
-
-// AddConsensusPeer requests connecting to a remote node, and also maintaining the new
-// connection at all times, even reconnecting if it is lost.
-func (api *PrivateAdminAPI) AddConsensusPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	// Try to add the url as a static peer and return
-	node, err := discover.ParseNode(url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.AddConsensusPeer(node)
-	return true, nil
-}
-
-// RemoveConsensusPeer disconnects from a remote node if the connection exists
-func (api *PrivateAdminAPI) RemoveConsensusPeer(url string) (bool, error) {
-	// Make sure the server is running, fail otherwise
-	server := api.node.Server()
-	if server == nil {
-		return false, ErrNodeStopped
-	}
-	// Try to remove the url as a static peer and return
-	node, err := discover.ParseNode(url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	server.RemoveConsensusPeer(node)
 	return true, nil
 }
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/PlatONnetwork/PlatON-Go/cmd/utils"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +41,6 @@ func init() {
 		commandChangePassphrase,
 		commandSignMessage,
 		commandVerifyMessage,
-		commandGenkeypair,
 	}
 }
 

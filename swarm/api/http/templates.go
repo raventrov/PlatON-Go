@@ -22,7 +22,7 @@ import (
 	"html/template"
 	"path"
 
-	"github.com/PlatONnetwork/PlatON-Go/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 type htmlListData struct {

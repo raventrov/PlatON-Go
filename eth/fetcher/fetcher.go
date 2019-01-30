@@ -22,11 +22,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/prque"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -94,7 +94,6 @@ type bodyFilterTask struct {
 	peer         string                 // The source peer of block bodies
 	transactions [][]*types.Transaction // Collection of transactions per block bodies
 	uncles       [][]*types.Header      // Collection of uncles per block bodies
-	signatures	 [][]*common.BlockConfirmSign
 	time         time.Time              // Arrival time of the blocks' contents
 }
 
@@ -119,16 +118,11 @@ type Fetcher struct {
 	quit chan struct{}
 
 	// Announce states
-	// Record the number of peer requests for obtaining block information
-	announces map[string]int // Per peer announce counts to prevent memory exhaustion
-	// Record peer request for obtaining block information
-	announced map[common.Hash][]*announce // Announced blocks, scheduled for fetching
-	// A request to get block information has been sent, waiting for a response
-	fetching map[common.Hash]*announce // Announced blocks, currently fetching
-	// Complete the acquisition of block information
-	fetched map[common.Hash][]*announce // Blocks with headers fetched, scheduled for body retrieval
-	// Finish getting the block header and downloading the body
-	completing map[common.Hash]*announce // Blocks with headers, currently body-completing
+	announces  map[string]int              // Per peer announce counts to prevent memory exhaustion
+	announced  map[common.Hash][]*announce // Announced blocks, scheduled for fetching
+	fetching   map[common.Hash]*announce   // Announced blocks, currently fetching
+	fetched    map[common.Hash][]*announce // Blocks with headers fetched, scheduled for body retrieval
+	completing map[common.Hash]*announce   // Blocks with headers, currently body-completing
 
 	// Block cache
 	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
@@ -254,8 +248,8 @@ func (f *Fetcher) FilterHeaders(peer string, headers []*types.Header, time time.
 
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
-func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, signatures [][]*common.BlockConfirmSign, time time.Time) ([][]*types.Transaction, [][]*types.Header, [][]*common.BlockConfirmSign) {
-	log.Trace("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles), "signatures", len(signatures))
+func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction, uncles [][]*types.Header, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
+	log.Trace("Filtering bodies", "peer", peer, "txs", len(transactions), "uncles", len(uncles))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *bodyFilterTask)
@@ -263,20 +257,20 @@ func (f *Fetcher) FilterBodies(peer string, transactions [][]*types.Transaction,
 	select {
 	case f.bodyFilter <- filter:
 	case <-f.quit:
-		return nil, nil, nil
+		return nil, nil
 	}
 	// Request the filtering of the body list
 	select {
-	case filter <- &bodyFilterTask{peer: peer, transactions: transactions, uncles: uncles, signatures: signatures, time: time}:
+	case filter <- &bodyFilterTask{peer: peer, transactions: transactions, uncles: uncles, time: time}:
 	case <-f.quit:
-		return nil, nil, nil
+		return nil, nil
 	}
 	// Retrieve the bodies remaining after filtering
 	select {
 	case task := <-filter:
-		return task.transactions, task.uncles, task.signatures
+		return task.transactions, task.uncles
 	case <-f.quit:
-		return nil, nil, nil
+		return nil, nil
 	}
 }
 
@@ -466,17 +460,16 @@ func (f *Fetcher) loop() {
 						announce.time = task.time
 
 						// If the block is empty (header only), short circuit into the final import queue
-						//if header.TxHash == types.DeriveSha(types.Transactions{}) && header.UncleHash == types.CalcUncleHash([]*types.Header{}) {
-						//	log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
-						//
-						//	block := types.NewBlockWithHeader(header)
-						//	block.ReceivedAt = task.time
-						//
-						//	complete = append(complete, block)
-						//	f.completing[hash] = announce
-						//	continue
-						//}
+						if header.TxHash == types.DeriveSha(types.Transactions{}) && header.UncleHash == types.CalcUncleHash([]*types.Header{}) {
+							log.Trace("Block empty, skipping body retrieval", "peer", announce.origin, "number", header.Number, "hash", header.Hash())
 
+							block := types.NewBlockWithHeader(header)
+							block.ReceivedAt = task.time
+
+							complete = append(complete, block)
+							f.completing[hash] = announce
+							continue
+						}
 						// Otherwise add to the list of blocks needing completion
 						incomplete = append(incomplete, announce)
 					} else {
@@ -523,7 +516,7 @@ func (f *Fetcher) loop() {
 			bodyFilterInMeter.Mark(int64(len(task.transactions)))
 
 			blocks := []*types.Block{}
-			for i := 0; i < len(task.transactions) && i < len(task.uncles) && i < len(task.signatures); i++ {
+			for i := 0; i < len(task.transactions) && i < len(task.uncles); i++ {
 				// Match up a body to any possible completion request
 				matched := false
 
@@ -537,7 +530,7 @@ func (f *Fetcher) loop() {
 							matched = true
 
 							if f.getBlock(hash) == nil {
-								block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i], task.signatures[i])
+								block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
 								block.ReceivedAt = task.time
 
 								blocks = append(blocks, block)

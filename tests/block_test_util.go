@@ -24,16 +24,17 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
-	"github.com/PlatONnetwork/PlatON-Go/common/math"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // A BlockTest checks handling of entire blocks.
@@ -110,7 +111,7 @@ func (t *BlockTest) Run() error {
 		return fmt.Errorf("genesis block state root does not match test: computed=%x, test=%x", gblock.Root().Bytes()[:6], t.json.Genesis.StateRoot[:6])
 	}
 
-	chain, err := core.NewBlockChain(db, nil, config, nil, vm.Config{}, nil)
+	chain, err := core.NewBlockChain(db, nil, config, ethash.NewShared(), vm.Config{}, nil)
 	if err != nil {
 		return err
 	}
@@ -143,6 +144,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 		ExtraData:  t.json.Genesis.ExtraData,
 		GasLimit:   t.json.Genesis.GasLimit,
 		GasUsed:    t.json.Genesis.GasUsed,
+		Difficulty: t.json.Genesis.Difficulty,
 		Mixhash:    t.json.Genesis.MixHash,
 		Coinbase:   t.json.Genesis.Coinbase,
 		Alloc:      t.json.Pre,
@@ -229,6 +231,9 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	}
 	if !bytes.Equal(h.ExtraData, h2.Extra) {
 		return fmt.Errorf("Extra data: want: %x have: %x", h.ExtraData, h2.Extra)
+	}
+	if h.Difficulty.Cmp(h2.Difficulty) != 0 {
+		return fmt.Errorf("Difficulty: want: %v have: %v", h.Difficulty, h2.Difficulty)
 	}
 	if h.GasLimit != h2.GasLimit {
 		return fmt.Errorf("GasLimit: want: %d have: %d", h.GasLimit, h2.GasLimit)

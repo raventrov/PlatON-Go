@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/accounts/abi"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/vm"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 func TestDefaults(t *testing.T) {
@@ -76,7 +76,7 @@ func TestEVM(t *testing.T) {
 
 func TestExecute(t *testing.T) {
 	ret, _, err := Execute([]byte{
-		byte(vm.PUSH1), 8,
+		byte(vm.PUSH1), 10,
 		byte(vm.PUSH1), 0,
 		byte(vm.MSTORE),
 		byte(vm.PUSH1), 32,
@@ -94,7 +94,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	state, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()), big.NewInt(0), common.Hash{})
+	state, _ := state.New(common.Hash{}, state.NewDatabase(ethdb.NewMemDatabase()))
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,

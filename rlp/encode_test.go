@@ -17,18 +17,14 @@
 package rlp
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/common/hexutil"
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
-	"reflect"
 	"sync"
 	"testing"
-	"encoding/hex"
 )
 
 type testEncoder struct {
@@ -271,118 +267,6 @@ func runEncTests(t *testing.T, f func(val interface{}) ([]byte, error)) {
 				i, output, test.output, test.val, test.val)
 		}
 	}
-}
-
-func uint64ToBytes(val uint64) []byte {
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, val)
-	return buf[:]
-}
-
-func boolToBytes(val bool) []byte {
-	buf := bytes.NewBuffer([]byte{})
-	binary.Write(buf, binary.BigEndian, true)
-	return buf.Bytes()
-}
-
-func TestDecodeEncode(t *testing.T){
-
-	///////////////////////////////////////////////////////////////////////////////
-	nodeId, _ := hex.DecodeString("e152be5f5f0167250592a12a197ab19b215c5295d5eb0bb1133673dc8607530db1bfa5415b2ec5e94113f2fce0c4a60e697d5d703a29609b197b836b020446c7")
-	owner, _ := hex.DecodeString("4FED1fC4144c223aE3C1553be203cDFcbD38C581")
-
-	var source [][]byte
-	source = make([][]byte, 0)
-	source = append(source, uint64ToBytes(0xf1))
-	source = append(source, []byte("CandidateDeposit"))
-	source = append(source, nodeId)
-	source = append(source, owner)
-	source = append(source, uint64ToBytes(500))	//10000
-	source = append(source, []byte("127.0.0.1"))
-	source = append(source, []byte("7890"))
-	source = append(source, []byte("extra data"))
-
-	//rlp Encode
-	buffer := new(bytes.Buffer)
-	err := Encode(buffer, source)
-	if err != nil {
-		fmt.Println(err)
-		t.Errorf("fail")
-	} else {
-		fmt.Println("encode_hex_string: ", hexutil.Encode(buffer.Bytes()))
-		fmt.Println("encode_bytes: ", buffer.Bytes())
-	}
-
-	//rlp Decode
-	ptr := new(interface{})
-	if err := Decode(bytes.NewReader(buffer.Bytes()), &ptr); err!=nil {
-		fmt.Println(err)
-		t.Errorf("fail")
-	} else {
-		deref := reflect.ValueOf(ptr).Elem().Interface()
-		for i, v := range deref.([]interface{}) {
-			fmt.Println(i,": ",hex.EncodeToString(v.([]byte)))
-		}
-	}
-}
-
-func TestEncodeF03(t *testing.T) {
-
-	str := "e4babae6898de698afe4bda0e59097"
-	res, _ := hexutil.Decode(str)
-
-	fmt.Println(string(res))
-
-	//val :=  []interface{}{"transfer", uint(0xFFFFFF), []interface{}{[]uint{4, 5, 5}}, "abc"}
-	fmt.Println([]byte("Are you?"))
-	var source [][]byte
-	source = make([][]byte, 0)
-	source = append(source, []byte("Are you?"))
-	source = append(source, uint64ToBytes(1000))
-	source = append(source, uint64ToBytes(2000))
-	source = append(source, boolToBytes(false))
-	source = append(source, []byte("hello world"))
-
-	buffer := new(bytes.Buffer)
-	err := Encode(buffer, source)
-	if err != nil {
-		fmt.Println(err)
-		t.Errorf("fail")
-	}
-	// the array after decode
-	encodedBytes := buffer.Bytes()
-	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-	fmt.Println("encode_string: ", hexutil.Encode(buffer.Bytes()))
-	fmt.Println(encodedBytes)
-
-
-	ptr := new(interface{})
-	Decode(bytes.NewReader(encodedBytes), &ptr)
-	deref := reflect.ValueOf(ptr).Elem().Interface()
-	fmt.Println(deref)
-
-	for i, v := range deref.([]interface{}) {
-		// fmt.Println(i,"    ",hex.EncodeToString(v.([]byte)))
-		// The type check, then convert
-		switch i {
-		case 0:
-			fmt.Println(string(v.([]byte)))
-		case 1:
-			fmt.Println(binary.BigEndian.Uint64(v.([]byte)))
-		case 2:
-			fmt.Println(binary.BigEndian.Uint64(v.([]byte)))
-		case 3:
-			byt := v.([]byte)[0]
-			if byt == 1 {
-				fmt.Println("false")
-			} else {
-				fmt.Println("true")
-			}
-		case 4:
-			fmt.Println(string(v.([]byte)))
-		}
-	}
-
 }
 
 func TestEncode(t *testing.T) {

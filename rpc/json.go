@@ -26,7 +26,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/PlatONnetwork/PlatON-Go/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -160,7 +160,6 @@ func checkReqId(reqId json.RawMessage) error {
 		return nil
 	}
 	var str string
-
 	if err := json.Unmarshal(reqId, &str); err == nil {
 		return nil
 	}

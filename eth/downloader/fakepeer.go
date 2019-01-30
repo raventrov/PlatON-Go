@@ -19,11 +19,11 @@ package downloader
 import (
 	"math/big"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // FakePeer is a mock downloader peer that operates on a local database instance
@@ -125,16 +125,14 @@ func (p *FakePeer) RequestBodies(hashes []common.Hash) error {
 	var (
 		txs    [][]*types.Transaction
 		uncles [][]*types.Header
-		signatures [][]*common.BlockConfirmSign
 	)
 	for _, hash := range hashes {
 		block := rawdb.ReadBlock(p.db, hash, *p.hc.GetBlockNumber(hash))
 
 		txs = append(txs, block.Transactions())
 		uncles = append(uncles, block.Uncles())
-		signatures = append(signatures, block.Signatures())
 	}
-	p.dl.DeliverBodies(p.id, txs, uncles, signatures)
+	p.dl.DeliverBodies(p.id, txs, uncles)
 	return nil
 }
 

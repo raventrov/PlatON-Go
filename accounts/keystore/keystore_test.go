@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/accounts"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/event"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 var testSigData = make([]byte, 32)
@@ -379,9 +379,9 @@ func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newS := NewPlaintextKeyStore
+	new := NewPlaintextKeyStore
 	if encrypted {
-		newS = func(kd string) *KeyStore { return NewKeyStore(kd, veryLightScryptN, veryLightScryptP) }
+		new = func(kd string) *KeyStore { return NewKeyStore(kd, veryLightScryptN, veryLightScryptP) }
 	}
-	return d, newS(d)
+	return d, new(d)
 }

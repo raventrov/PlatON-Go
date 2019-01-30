@@ -21,11 +21,13 @@ package light
 import (
 	"context"
 	"errors"
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // NoOdr is the default context passed to an ODR capable function when the ODR
@@ -139,6 +141,7 @@ type ChtRequest struct {
 	ChtNum, BlockNum uint64
 	ChtRoot          common.Hash
 	Header           *types.Header
+	Td               *big.Int
 	Proof            *NodeSet
 }
 
@@ -147,6 +150,7 @@ func (req *ChtRequest) StoreResult(db ethdb.Database) {
 	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
 
 	rawdb.WriteHeader(db, req.Header)
+	rawdb.WriteTd(db, hash, num, req.Td)
 	rawdb.WriteCanonicalHash(db, hash, num)
 }
 

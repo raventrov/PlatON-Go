@@ -19,10 +19,10 @@ package core
 import (
 	"fmt"
 
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core/state"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -106,9 +106,6 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 // ceil if the blocks are full. If the ceil is exceeded, it will always decrease
 // the gas allowance.
 func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
-
-	return parent.GasLimit()
-
 	// contrib = (parentGasUsed * 3 / 2) / 1024
 	contrib := (parent.GasUsed() + parent.GasUsed()/2) / params.GasLimitBoundDivisor
 

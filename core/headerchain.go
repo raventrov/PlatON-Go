@@ -26,18 +26,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/consensus"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/hashicorp/golang-lru"
 )
 
 const (
 	headerCacheLimit = 512
+	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
 )
 
@@ -56,6 +57,7 @@ type HeaderChain struct {
 	currentHeaderHash common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
 	headerCache *lru.Cache // Cache for the most recent block headers
+	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
 
 	procInterrupt func() bool
@@ -70,6 +72,7 @@ type HeaderChain struct {
 //  wg points to the parent's shutdown wait group
 func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
+	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
 
 	// Seed a fast but crypto originating random generator
@@ -82,6 +85,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		config:        config,
 		chainDb:       chainDb,
 		headerCache:   headerCache,
+		tdCache:       tdCache,
 		numberCache:   numberCache,
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
@@ -120,7 +124,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 
 // WriteHeader writes a header into the local chain, given that its parent is
 // already known. If the total difficulty of the newly inserted header becomes
-// greater than the current known number, the canonical chain is re-routed.
+// greater than the current known TD, the canonical chain is re-routed.
 //
 // Note: This method is not concurrent-safe with inserting blocks simultaneously
 // into the chain, as side effects caused by reorganisations cannot be emulated
@@ -133,16 +137,24 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 		hash   = header.Hash()
 		number = header.Number.Uint64()
 	)
-	localBn := hc.CurrentHeader().Number
-	externBn := header.Number
+	// Calculate the total difficulty of the header
+	ptd := hc.GetTd(header.ParentHash, number-1)
+	if ptd == nil {
+		return NonStatTy, consensus.ErrUnknownAncestor
+	}
+	localTd := hc.GetTd(hc.currentHeaderHash, hc.CurrentHeader().Number.Uint64())
+	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
-	// Irrelevant of the canonical status, write the header to the database
+	// Irrelevant of the canonical status, write the td and header to the database
+	if err := hc.WriteTd(hash, number, externTd); err != nil {
+		log.Crit("Failed to write header total difficulty", "err", err)
+	}
 	rawdb.WriteHeader(hc.chainDb, header)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
-	if externBn.Cmp(localBn) > 0 || (externBn.Cmp(localBn) == 0 && mrand.Float64() < 0.5) {
+	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Delete any canonical number assignments above the new head
 		batch := hc.chainDb.NewBatch()
 		for i := number + 1; ; i++ {
@@ -345,6 +357,40 @@ func (hc *HeaderChain) GetAncestor(hash common.Hash, number, ancestor uint64, ma
 	return hash, number
 }
 
+// GetTd retrieves a block's total difficulty in the canonical chain from the
+// database by hash and number, caching it if found.
+func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
+	// Short circuit if the td's already in the cache, retrieve otherwise
+	if cached, ok := hc.tdCache.Get(hash); ok {
+		return cached.(*big.Int)
+	}
+	td := rawdb.ReadTd(hc.chainDb, hash, number)
+	if td == nil {
+		return nil
+	}
+	// Cache the found body for next time and return
+	hc.tdCache.Add(hash, td)
+	return td
+}
+
+// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
+// database by hash, caching it if found.
+func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return hc.GetTd(hash, *number)
+}
+
+// WriteTd stores a block's total difficulty into the database, also caching it
+// along the way.
+func (hc *HeaderChain) WriteTd(hash common.Hash, number uint64, td *big.Int) error {
+	rawdb.WriteTd(hc.chainDb, hash, number, td)
+	hc.tdCache.Add(hash, new(big.Int).Set(td))
+	return nil
+}
+
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
@@ -423,6 +469,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 			delFn(batch, hash, num)
 		}
 		rawdb.DeleteHeader(batch, hash, num)
+		rawdb.DeleteTd(batch, hash, num)
 
 		hc.currentHeader.Store(hc.GetHeader(hdr.ParentHash, hdr.Number.Uint64()-1))
 	}
@@ -434,6 +481,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
+	hc.tdCache.Purge()
 	hc.numberCache.Purge()
 
 	if hc.CurrentHeader() == nil {

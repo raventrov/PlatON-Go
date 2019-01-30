@@ -17,7 +17,7 @@
 package api
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 type Control struct {

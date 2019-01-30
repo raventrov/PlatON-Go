@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
-	"github.com/PlatONnetwork/PlatON-Go/les/flowcontrol"
-	"github.com/PlatONnetwork/PlatON-Go/light"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -105,7 +105,7 @@ func (p *peer) queueSend(f func()) {
 func (p *peer) Info() *eth.PeerInfo {
 	return &eth.PeerInfo{
 		Version:    p.version,
-		BN:         new(big.Int).SetUint64(p.headInfo.Number),
+		Difficulty: p.Td(),
 		Head:       fmt.Sprintf("%x", p.Head()),
 	}
 }
@@ -119,28 +119,28 @@ func (p *peer) Head() (hash common.Hash) {
 	return hash
 }
 
-func (p *peer) HeadAndNum() (hash common.Hash, td *big.Int) {
+func (p *peer) HeadAndTd() (hash common.Hash, td *big.Int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.headInfo.Hash[:])
-	return hash, new(big.Int).SetUint64(p.headInfo.Number)
+	return hash, p.headInfo.Td
 }
 
 func (p *peer) headBlockInfo() blockInfo {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return blockInfo{Hash: p.headInfo.Hash, Number: p.headInfo.Number}
+	return blockInfo{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td}
 }
 
 // Td retrieves the current total difficulty of a peer.
-/*func (p *peer) Td() *big.Int {
+func (p *peer) Td() *big.Int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	return new(big.Int).Set(p.headInfo.Td)
-}*/
+}
 
 // waitBefore implements distPeer interface
 func (p *peer) waitBefore(maxCost uint64) (time.Duration, float64) {
@@ -393,14 +393,14 @@ func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error)
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
+func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	var send keyValueList
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", p.network)
-	//send = send.add("headTd", td)
+	send = send.add("headTd", td)
 	send = send.add("headHash", head)
 	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
@@ -491,7 +491,7 @@ func (p *peer) Handshake(head common.Hash, headNum uint64, genesis common.Hash, 
 		p.fcCosts = MRC.decode()
 	}
 
-	p.headInfo = &announceData{Hash: rHash, Number: rNum}
+	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
 }
 
@@ -623,11 +623,11 @@ func (ps *peerSet) BestPeer() *peer {
 
 	var (
 		bestPeer *peer
-		bestBn   uint64
+		bestTd   *big.Int
 	)
 	for _, p := range ps.peers {
-		if bn := p.headInfo.Number; bestPeer == nil || bn > bestBn {
-			bestPeer, bestBn = p, bn
+		if td := p.Td(); bestPeer == nil || td.Cmp(bestTd) > 0 {
+			bestPeer, bestTd = p, td
 		}
 	}
 	return bestPeer

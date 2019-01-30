@@ -23,18 +23,19 @@ import (
 	"math"
 	"sync"
 
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/eth"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/les/flowcontrol"
-	"github.com/PlatONnetwork/PlatON-Go/light"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/p2p"
-	"github.com/PlatONnetwork/PlatON-Go/p2p/discv5"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/les/flowcontrol"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type LesServer struct {
@@ -324,7 +325,7 @@ func (pm *ProtocolManager) blockLoop() {
 	headSub := pm.blockchain.SubscribeChainHeadEvent(headCh)
 	go func() {
 		var lastHead *types.Header
-		lastBroadcastBn := uint64(0)
+		lastBroadcastTd := common.Big0
 		for {
 			select {
 			case ev := <-headCh:
@@ -333,17 +334,18 @@ func (pm *ProtocolManager) blockLoop() {
 					header := ev.Block.Header()
 					hash := header.Hash()
 					number := header.Number.Uint64()
-					if number > lastBroadcastBn {
+					td := rawdb.ReadTd(pm.chainDb, hash, number)
+					if td != nil && td.Cmp(lastBroadcastTd) > 0 {
 						var reorg uint64
 						if lastHead != nil {
 							reorg = lastHead.Number.Uint64() - rawdb.FindCommonAncestor(pm.chainDb, header, lastHead).Number.Uint64()
 						}
 						lastHead = header
-						lastBroadcastBn = number
+						lastBroadcastTd = td
 
-						log.Debug("Announcing block to peers", "number", number, "hash", hash, "reorg", reorg)
+						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 
-						announce := announceData{Hash: hash, Number: number, ReorgDepth: reorg}
+						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
 						var (
 							signed         bool
 							signedAnnounce announceData

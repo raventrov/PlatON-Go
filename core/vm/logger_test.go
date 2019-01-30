@@ -17,13 +17,11 @@
 package vm
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"bytes"
 	"math/big"
 	"testing"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type dummyContractRef struct {
@@ -63,23 +61,5 @@ func TestStoreCapture(t *testing.T) {
 	exp := common.BigToHash(big.NewInt(1))
 	if logger.changedValues[contract.Address()][index] != exp {
 		t.Errorf("expected %x, got %x", exp, logger.changedValues[contract.Address()][index])
-	}
-}
-
-func TestNewWasmLogger(t *testing.T) {
-	logger := log.New("test.wasm")
-
-	buf := new(bytes.Buffer)
-
-	logger.SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(buf, log.FormatFunc(func(r *log.Record) []byte {
-		return []byte(r.Msg)
-	}))))
-
-	wasmLog := NewWasmLogger(Config{Debug:true}, logger)
-
-	wasmLog.Info("hello")
-	wasmLog.Flush()
-	if buf.String() != "hello" {
-		t.Fatalf("output log error")
 	}
 }

@@ -17,9 +17,9 @@
 package vm
 
 import (
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/math"
-	"github.com/PlatONnetwork/PlatON-Go/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // memoryGasCosts calculates the quadratic gas for memory expansion. It does so
@@ -118,9 +118,7 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x    = stack.Back(1), stack.Back(0)
-		// todo: hash -> bytes
-		currentBytes = evm.StateDB.GetState(contract.Address(), common.BigToHash(x).Bytes())
-		current = common.BytesToHash(currentBytes)
+		current = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
 	)
 	// The legacy gas metering only takes into consideration the current state
 	if !evm.chainRules.IsConstantinople {
@@ -157,9 +155,7 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 	if current == value { // noop (1)
 		return params.NetSstoreNoopGas, nil
 	}
-	// todo: hash -> bytes
-	originalByt := evm.StateDB.GetCommittedState(contract.Address(), common.BigToHash(x).Bytes())
-	var original = common.BytesToHash(originalByt)
+	original := evm.StateDB.GetCommittedState(contract.Address(), common.BigToHash(x))
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
 			return params.NetSstoreInitGas, nil

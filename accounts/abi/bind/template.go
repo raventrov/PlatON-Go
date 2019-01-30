@@ -16,7 +16,7 @@
 
 package bind
 
-import "github.com/PlatONnetwork/PlatON-Go/accounts/abi"
+import "github.com/ethereum/go-ethereum/accounts/abi"
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {
@@ -427,8 +427,8 @@ const tmplSourceJava = `
 
 package {{.Package}};
 
-import org.platon.*;
-import org.platon.internal.*;
+import org.ethereum.geth.*;
+import org.ethereum.geth.internal.*;
 
 {{range $contract := .Contracts}}
 	public class {{.Type}} {

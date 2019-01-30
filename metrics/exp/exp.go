@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/PlatONnetwork/PlatON-Go/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 type exp struct {

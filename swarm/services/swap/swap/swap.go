@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // SwAP Swarm Accounting Protocol with

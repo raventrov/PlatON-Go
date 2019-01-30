@@ -21,18 +21,19 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/common/bitutil"
-	"github.com/PlatONnetwork/PlatON-Go/core"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/params"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // IndexerConfig includes a set of configs for chain indexers.
@@ -121,6 +122,7 @@ var (
 // ChtNode structures are stored in the Canonical Hash Trie in an RLP encoded format
 type ChtNode struct {
 	Hash common.Hash
+	Td   *big.Int
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database
@@ -213,9 +215,13 @@ func (c *ChtIndexerBackend) Process(ctx context.Context, header *types.Header) e
 	hash, num := header.Hash(), header.Number.Uint64()
 	c.lastHash = hash
 
+	td := rawdb.ReadTd(c.diskdb, hash, num)
+	if td == nil {
+		panic(nil)
+	}
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)
-	data, _ := rlp.EncodeToBytes(ChtNode{hash})
+	data, _ := rlp.EncodeToBytes(ChtNode{hash, td})
 	c.trie.Update(encNumber[:], data)
 	return nil
 }

@@ -23,15 +23,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/PlatONnetwork/PlatON-Go/common"
-	"github.com/PlatONnetwork/PlatON-Go/core/rawdb"
-	"github.com/PlatONnetwork/PlatON-Go/core/types"
-	"github.com/PlatONnetwork/PlatON-Go/crypto"
-	"github.com/PlatONnetwork/PlatON-Go/ethdb"
-	"github.com/PlatONnetwork/PlatON-Go/light"
-	"github.com/PlatONnetwork/PlatON-Go/log"
-	"github.com/PlatONnetwork/PlatON-Go/rlp"
-	"github.com/PlatONnetwork/PlatON-Go/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -428,6 +428,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		// Verifications passed, store and return
 		r.Header = proof.Header
 		r.Proof = light.NodeList(proof.Proof).NodeSet()
+		r.Td = node.Td
 	case MsgHelperTrieProofs:
 		resp := msg.Obj.(HelperTrieResps)
 		if len(resp.AuxData) != 1 {
@@ -469,6 +470,7 @@ func (r *ChtRequest) Validate(db ethdb.Database, msg *Msg) error {
 		// Verifications passed, store and return
 		r.Header = header
 		r.Proof = nodeSet
+		r.Td = node.Td
 	default:
 		return errInvalidMessageType
 	}
